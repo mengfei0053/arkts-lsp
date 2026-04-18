@@ -25,4 +25,4 @@ This file applies to everything under `src/`.
 ## Current Boundaries
 
 - `index.ts`: LSP connection setup and request/notification registration
-- `core.ts`: diagnostics, symbols, hover formatting, word lookup, and definition helpers
+- `core.ts`: diagnostics, symbols, hover formatting, word lookup, definition helpers, reference lookup, and completion helpers

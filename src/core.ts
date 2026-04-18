@@ -1,9 +1,12 @@
 import {
+  CompletionItem,
+  CompletionItemKind,
   Diagnostic,
   DiagnosticSeverity,
   Hover,
   Location,
   Position,
+  Range,
   SymbolInformation,
   SymbolKind,
   WorkspaceSymbol,
@@ -18,6 +21,34 @@ type DefinitionContext = {
   document: TextDocument;
   symbols: SymbolInformation[];
 };
+
+const arktsKeywords = [
+  "import",
+  "export",
+  "struct",
+  "class",
+  "interface",
+  "enum",
+  "type",
+  "extends",
+  "implements",
+  "function",
+  "const",
+  "let",
+  "var",
+  "if",
+  "else",
+  "for",
+  "while",
+  "return",
+  "async",
+  "await",
+  "@Entry",
+  "@Component",
+  "@State",
+  "@Prop",
+  "@Link",
+];
 
 export function buildHover(document: TextDocument, position: Position): Hover | null {
   const lineText = document.getText({
@@ -169,6 +200,50 @@ export function findDefinitions({ document, symbols }: DefinitionContext, positi
   );
 }
 
+export function findReferences(documents: TextDocument[], document: TextDocument, position: Position): Location[] {
+  const word = getWordAtPosition(document, position);
+  if (!word) {
+    return [];
+  }
+
+  return documents.flatMap((candidate) => collectWordLocations(candidate, word));
+}
+
+export function buildCompletionItems(documents: TextDocument[], document: TextDocument, position: Position): CompletionItem[] {
+  const prefix = getCompletionPrefix(document, position).toLowerCase();
+  const seen = new Set<string>();
+  const items: CompletionItem[] = [];
+
+  for (const keyword of arktsKeywords) {
+    if (!prefix || keyword.toLowerCase().startsWith(prefix)) {
+      items.push({
+        label: keyword,
+        kind: keyword.startsWith("@") ? CompletionItemKind.Property : CompletionItemKind.Keyword,
+        detail: "ArkTS keyword",
+      });
+      seen.add(keyword);
+    }
+  }
+
+  for (const symbol of documents.flatMap((candidate) => collectDocumentSymbols(candidate))) {
+    if (seen.has(symbol.name)) {
+      continue;
+    }
+    if (prefix && !symbol.name.toLowerCase().startsWith(prefix)) {
+      continue;
+    }
+
+    items.push({
+      label: symbol.name,
+      kind: mapSymbolKindToCompletionKind(symbol.kind),
+      detail: symbol.containerName ? `Workspace symbol (${symbol.containerName})` : "Workspace symbol",
+    });
+    seen.add(symbol.name);
+  }
+
+  return items.slice(0, 100);
+}
+
 export function getWordAtPosition(document: TextDocument, position: Position): string | null {
   const lineRange = {
     start: { line: position.line, character: 0 },
@@ -195,6 +270,45 @@ export function getWordAtPosition(document: TextDocument, position: Position): s
   return line.slice(start, end);
 }
 
+function collectWordLocations(document: TextDocument, word: string): Location[] {
+  const escapedWord = escapeRegExp(word);
+  const pattern = new RegExp(`\\b${escapedWord}\\b`, "gu");
+  const lines = document.getText().split(/\r?\n/u);
+  const locations: Location[] = [];
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    for (const match of line.matchAll(pattern)) {
+      const startCharacter = match.index ?? 0;
+      locations.push({
+        uri: document.uri,
+        range: {
+          start: { line: lineIndex, character: startCharacter },
+          end: { line: lineIndex, character: startCharacter + word.length },
+        },
+      });
+    }
+  }
+
+  return locations;
+}
+
+function getCompletionPrefix(document: TextDocument, position: Position): string {
+  const lineRange = {
+    start: { line: position.line, character: 0 },
+    end: { line: position.line + 1, character: 0 },
+  };
+  const line = document.getText(lineRange);
+  const safeCharacter = Math.min(position.character, line.length);
+  let start = safeCharacter;
+
+  while (start > 0 && /[@A-Za-z0-9_]/u.test(line[start - 1] ?? "")) {
+    start -= 1;
+  }
+
+  return line.slice(start, safeCharacter);
+}
+
 function createSymbol(
   document: TextDocument,
   lineIndex: number,
@@ -217,6 +331,29 @@ function createSymbol(
     },
     containerName,
   };
+}
+
+function mapSymbolKindToCompletionKind(symbolKind: SymbolKind): CompletionItemKind {
+  switch (symbolKind) {
+    case SymbolKind.Class:
+      return CompletionItemKind.Class;
+    case SymbolKind.Interface:
+      return CompletionItemKind.Interface;
+    case SymbolKind.Enum:
+      return CompletionItemKind.Enum;
+    case SymbolKind.Function:
+      return CompletionItemKind.Function;
+    case SymbolKind.Variable:
+      return CompletionItemKind.Variable;
+    case SymbolKind.TypeParameter:
+      return CompletionItemKind.TypeParameter;
+    default:
+      return CompletionItemKind.Text;
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function escapeMarkdown(value: string): string {

@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { Position, SymbolKind } from "vscode-languageserver/node.js";
+import { CompletionItemKind, Position, SymbolKind } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
+  buildCompletionItems,
   buildHover,
   collectDiagnostics,
   collectDocumentSymbols,
   collectWorkspaceSymbols,
   findDefinitions,
+  findReferences,
   getWordAtPosition,
 } from "../src/core.js";
 
@@ -111,6 +113,23 @@ describe("workspace navigation helpers", () => {
     expect(definitions[0].uri).toBe("file:///first.ets");
     expect(definitions[1].uri).toBe("file:///second.ets");
   });
+
+  it("finds references across open documents", () => {
+    const first = makeDocument(
+      "file:///first.ets",
+      ["export function loadProfile() {}", "const value = loadProfile();"].join("\n"),
+    );
+    const second = makeDocument("file:///second.ets", "loadProfile();");
+
+    const references = findReferences([first, second], first, Position.create(1, 20));
+
+    expect(references).toHaveLength(3);
+    expect(references.map((location) => location.uri)).toEqual([
+      "file:///first.ets",
+      "file:///first.ets",
+      "file:///second.ets",
+    ]);
+  });
 });
 
 describe("buildHover", () => {
@@ -122,5 +141,25 @@ describe("buildHover", () => {
     expect(hover).not.toBeNull();
     const contents = hover?.contents;
     expect(typeof contents === "object" && "value" in contents ? contents.value : "").toContain("profileName");
+  });
+});
+
+describe("buildCompletionItems", () => {
+  it("suggests ArkTS keywords and workspace symbols by prefix", () => {
+    const first = makeDocument("file:///first.ets", "struct HomePage {}");
+    const second = makeDocument("file:///second.ets", "const helperValue = 1;\nhel");
+
+    const items = buildCompletionItems([first, second], second, Position.create(1, 3));
+
+    expect(items.some((item) => item.label === "helperValue" && item.kind === CompletionItemKind.Variable)).toBe(true);
+  });
+
+  it("includes decorator completions when typing @", () => {
+    const document = makeDocument("file:///entry.ets", "@");
+
+    const items = buildCompletionItems([document], document, Position.create(0, 1));
+
+    expect(items.some((item) => item.label === "@Entry")).toBe(true);
+    expect(items.some((item) => item.label === "@Component")).toBe(true);
   });
 });

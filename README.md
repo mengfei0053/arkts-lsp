@@ -11,6 +11,8 @@ The current goal of the repository is to provide a clean MVP that we can iterate
 - simple hover support
 - simple document/workspace symbols
 - simple definition lookup based on indexed declarations
+- simple references lookup based on exact identifier matches
+- simple completion from ArkTS keywords and indexed workspace symbols
 
 ## Status
 
@@ -24,6 +26,8 @@ Current capabilities:
 - regex-based symbol extraction for common ArkTS/TypeScript declarations
 - workspace symbol search across open documents
 - basic definition lookup by symbol name
+- exact-word reference lookup across open documents
+- lightweight keyword and symbol completion suggestions
 
 ## Quick Start
 

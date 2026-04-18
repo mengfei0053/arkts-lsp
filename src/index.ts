@@ -1,20 +1,24 @@
 import {
+  CompletionItem,
   createConnection,
   DidChangeConfigurationNotification,
   Hover,
   InitializeParams,
   InitializeResult,
+  Location,
   ProposedFeatures,
   TextDocumentSyncKind,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocuments } from "vscode-languageserver";
 import {
+  buildCompletionItems,
   buildHover,
   collectDiagnostics,
   collectDocumentSymbols,
   collectWorkspaceSymbols,
   findDefinitions,
+  findReferences,
   ServerSettings,
 } from "./core.js";
 
@@ -35,8 +39,13 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       hoverProvider: true,
       definitionProvider: true,
+      referencesProvider: true,
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
+      completionProvider: {
+        resolveProvider: false,
+        triggerCharacters: [".", "@", ":"],
+      },
     },
   };
 });
@@ -91,6 +100,24 @@ connection.onDefinition(({ textDocument, position }) => {
     document,
     symbols: documents.all().flatMap((candidate) => collectDocumentSymbols(candidate)),
   }, position);
+});
+
+connection.onReferences(({ textDocument, position }): Location[] => {
+  const document = documents.get(textDocument.uri);
+  if (!document) {
+    return [];
+  }
+
+  return findReferences(documents.all(), document, position);
+});
+
+connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
+  const document = documents.get(textDocument.uri);
+  if (!document) {
+    return [];
+  }
+
+  return buildCompletionItems(documents.all(), document, position);
 });
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
