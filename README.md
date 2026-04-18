@@ -1,6 +1,6 @@
 # arkts-lsp
 
-## 中文说明
+[English README](./README.en.md)
 
 `arkts-lsp` 是一个面向 ArkTS/HarmonyOS 工程的轻量级 Language Server Protocol 实现。
 
@@ -8,7 +8,7 @@
 
 最终方向是让类似 `opencode` 这样的工具在处理 ArkTS 文件时，可以稳定启动 `arkts-lsp`，并正常使用常见 LSP 能力。
 
-### 当前目标
+## 当前目标
 
 当前阶段优先完成一个可持续演进的 MVP：
 
@@ -18,7 +18,7 @@
 - 支持基础诊断、悬浮、跳转、引用、补全、重命名等能力
 - 建立测试基础，保证后续迭代不轻易回退
 
-### 当前能力
+## 当前能力
 
 目前已经具备的能力包括：
 
@@ -32,18 +32,20 @@
 - 基于 ArkTS 关键字和工作区符号的轻量补全
 - 当前文档中的标识符高亮
 - 基于精确标识符匹配生成 `WorkspaceEdit` 的重命名
+- ArkTS/HarmonyOS 项目根识别
+- `.ets` / `.ts` 文件扫描与项目级文档加载
+- 面向 `opencode` 的接入脚本和配置示例
 
-### 当前状态
+## 当前状态
 
 项目仍处于早期阶段，重点放在：
 
 - 稳定 LSP 服务端生命周期
 - 提升可测试性
 - 逐步从“文本级匹配”升级为“ArkTS 项目级感知”
+- 面向真实鸿蒙项目逐步验证 `opencode` 接入
 
-换句话说，现在已经能提供一部分实用能力，但距离“真实 HarmonyOS 工程里长期稳定可用”还有几个阶段要完成。
-
-### 快速开始
+## 快速开始
 
 ```bash
 npm install
@@ -57,7 +59,7 @@ npm run start -- --stdio
 npm run dev -- --stdio
 ```
 
-### 常用脚本
+## 常用脚本
 
 - `npm run build`：编译 TypeScript 到 `dist/`
 - `npm run dev`：使用 `tsx` 启动开发态服务
@@ -65,7 +67,7 @@ npm run dev -- --stdio
 - `npm run check`：执行 TypeScript 类型检查
 - `npm test`：运行 Vitest 单元测试
 
-### 测试覆盖
+## 测试覆盖
 
 当前测试主要覆盖最容易在早期迭代中回退的核心行为：
 
@@ -79,8 +81,10 @@ npm run dev -- --stdio
 - hover 内容格式化
 - document highlight
 - rename 生成的 workspace edit
+- 项目根识别
+- 项目文件扫描与项目级上下文加载
 
-### 最终目标
+## 最终目标
 
 这个项目的最终目标是：
 
@@ -98,18 +102,17 @@ npm run dev -- --stdio
 - `completion`
 - `diagnostics`
 
-### 后续路线
+## 后续路线
 
 接下来的主线工作会集中在：
 
-1. ArkTS/HarmonyOS 项目根识别
-2. `.ets` / `.ts` 文件扫描与索引
-3. import / module 解析
-4. 把 definition / references / rename 从文本级匹配提升到项目级解析
-5. 增加更贴近真实工程的 fixture 和集成测试
-6. 准备 `opencode` 接入配置和端到端验证
+1. import / module 解析
+2. 把 definition / references / rename 从文本级匹配继续提升到项目级解析
+3. 增加更贴近真实工程的 fixture 和集成测试
+4. 准备更完整的 `opencode` 端到端验证
+5. 优化补全和诊断质量
 
-### opencode 接入
+## opencode 接入
 
 根据 OpenCode 官方文档，LSP 可以通过 `opencode.json` 里的 `lsp` 字段自定义配置。文档说明：
 
@@ -164,124 +167,3 @@ npm run dev -- --stdio
 ```
 
 这样做的目的，是让 `opencode` 在写 ArkTS 页面、组件和同项目辅助 `.ts` 文件时，都优先走 `arkts-lsp`。
-
----
-
-## English
-
-`arkts-lsp` is a lightweight Language Server Protocol implementation for ArkTS projects.
-
-The project is intentionally taking an MVP-first approach. The short-term goal is not to build a compiler-grade ArkTS language engine all at once, but to provide a runnable, testable, extensible LSP server that can later be integrated into tools such as `opencode`.
-
-### Current Goal
-
-The repository is currently focused on a clean, iterative MVP:
-
-- project bootstrap for Node.js + TypeScript
-- a runnable LSP server
-- incremental text synchronization
-- basic diagnostics, hover, navigation, completion, and rename support
-- test coverage for the most regression-prone core behaviors
-
-### Current Capabilities
-
-- incremental text synchronization
-- TODO and `any` diagnostics
-- hover preview for the current line
-- regex-based symbol extraction for common ArkTS/TypeScript declarations
-- document symbols and workspace symbols
-- basic definition lookup by symbol name
-- exact-word reference lookup across open documents
-- lightweight completion from ArkTS keywords and indexed workspace symbols
-- exact-word document highlights in the current file
-- workspace rename edits for exact-word matches in open documents
-
-### Status
-
-This is still an early scaffold focused on:
-
-- stabilizing the server lifecycle
-- improving testability
-- gradually moving from text-level matching to ArkTS project-aware behavior
-
-### Quick Start
-
-```bash
-npm install
-npm run build
-npm run start -- --stdio
-```
-
-For local development:
-
-```bash
-npm run dev -- --stdio
-```
-
-### Scripts
-
-- `npm run build`: compile TypeScript to `dist/`
-- `npm run dev`: run the server with `tsx`
-- `npm run start`: run the compiled server
-- `npm run check`: type-check without emitting files
-- `npm test`: run the unit test suite with Vitest
-
-### Testing
-
-Current tests cover the core behaviors that are easiest to regress while the server is still evolving:
-
-- diagnostics extraction
-- symbol extraction
-- word lookup at a cursor position
-- workspace symbol filtering
-- definition resolution
-- reference lookup
-- completion results
-- hover formatting
-- document highlight
-- rename workspace edits
-
-### End Goal
-
-The end goal is to make `arkts-lsp` usable from `opencode`, so that ArkTS files can benefit from standard LSP features during code generation and editing.
-
-In the target setup, `opencode` should be able to launch `arkts-lsp` automatically for ArkTS files and use:
-
-- `hover`
-- `definition`
-- `references`
-- `rename`
-- `completion`
-- `diagnostics`
-
-### Roadmap
-
-The next major milestones are:
-
-1. ArkTS/HarmonyOS project root detection
-2. `.ets` / `.ts` file scanning and indexing
-3. import and module resolution
-4. upgrading definition / references / rename from text matching to project-aware behavior
-5. adding fixture-based and integration-style tests
-6. preparing `opencode` integration and end-to-end validation
-
-### opencode Integration
-
-OpenCode officially supports custom LSP servers through the `lsp` section in `opencode.json`.
-
-Useful paths:
-
-- global config: `~/.config/opencode/opencode.json`
-- project config: `opencode.json` in the project root
-
-This repository now includes:
-
-- [examples/opencode.global.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.global.json:1)
-- [examples/opencode.project.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.project.json:1)
-- [scripts/opencode-arkts-lsp](/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp:1)
-
-Recommended rollout:
-
-1. Enable `.ets` globally first
-2. Add project-level config in real ArkTS/HarmonyOS workspaces
-3. Disable the built-in TypeScript LSP per ArkTS project if you want `.ts` files handled by `arkts-lsp`
