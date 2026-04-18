@@ -26,6 +26,7 @@ The repository is currently focused on a clean, iterative MVP:
 - basic definition lookup by symbol name
 - import/export-aware definition, references, and rename
 - lightweight completion from ArkTS keywords, indexed workspace symbols, and named-import exports
+- static member completion for imported classes
 - relative import path resolution and path completion
 - exact-word document highlights in the current file
 - ArkTS/HarmonyOS project root detection

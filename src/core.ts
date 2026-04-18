@@ -57,6 +57,15 @@ export type NamedImportContext = {
   };
 };
 
+export type MemberAccessContext = {
+  receiver: string;
+  prefix: string;
+  range: {
+    start: Position;
+    end: Position;
+  };
+};
+
 const arktsKeywords = [
   "import",
   "export",
@@ -600,6 +609,22 @@ export function buildNamedImportCompletionItems(
     }));
 }
 
+export function buildClassMemberCompletionItems(
+  targetDocument: TextDocument,
+  className: string,
+  prefix = "",
+): CompletionItem[] {
+  return collectClassMembers(targetDocument, className)
+    .filter((member) => !prefix || member.name.toLowerCase().startsWith(prefix.toLowerCase()))
+    .slice(0, 100)
+    .map((member) => ({
+      label: member.name,
+      kind: member.kind,
+      detail: `Member of ${className}`,
+      insertText: member.name,
+    }));
+}
+
 export function getWordAtPosition(document: TextDocument, position: Position): string | null {
   const lineRange = {
     start: { line: position.line, character: 0 },
@@ -697,6 +722,31 @@ export function getNamedImportContextAtPosition(document: TextDocument, position
   }
 
   return null;
+}
+
+export function getMemberAccessContextAtPosition(document: TextDocument, position: Position): MemberAccessContext | null {
+  const line = document.getText({
+    start: { line: position.line, character: 0 },
+    end: { line: position.line + 1, character: 0 },
+  });
+  const safeCharacter = Math.min(position.character, line.length);
+  const beforeCursor = line.slice(0, safeCharacter);
+  const match = beforeCursor.match(/([A-Za-z_]\w*)\.([A-Za-z_]\w*)?$/u);
+  if (!match) {
+    return null;
+  }
+
+  const receiver = match[1];
+  const prefix = match[2] ?? "";
+  const receiverStart = safeCharacter - match[0].length;
+  return {
+    receiver,
+    prefix,
+    range: {
+      start: { line: position.line, character: receiverStart },
+      end: { line: position.line, character: safeCharacter },
+    },
+  };
 }
 
 function collectWordLocations(document: TextDocument, word: string): Location[] {
@@ -839,6 +889,57 @@ function deriveNamedImportPrefix(clause: string, offset: number): string {
   return (aliasParts.at(-1) ?? "").trim();
 }
 
+function collectClassMembers(
+  document: TextDocument,
+  className: string,
+): Array<{ name: string; kind: CompletionItemKind }> {
+  const lines = document.getText().split(/\r?\n/u);
+  const classIndex = lines.findIndex((line) =>
+    new RegExp(`^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+${escapeRegExp(className)}\\b`, "u").test(line.trim()),
+  );
+  if (classIndex < 0) {
+    return [];
+  }
+
+  const members: Array<{ name: string; kind: CompletionItemKind }> = [];
+  let braceDepth = 0;
+  let inClassBody = false;
+
+  for (let lineIndex = classIndex; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    for (const char of line) {
+      if (char === "{") {
+        braceDepth += 1;
+        inClassBody = true;
+      } else if (char === "}") {
+        braceDepth -= 1;
+        if (inClassBody && braceDepth <= 0) {
+          return dedupeMembers(members);
+        }
+      }
+    }
+
+    if (!inClassBody) {
+      continue;
+    }
+
+    const methodMatch = line.match(/^\s*(?:public\s+|private\s+|protected\s+)?static\s+([A-Za-z_]\w*)\s*\(/u);
+    if (methodMatch) {
+      members.push({ name: methodMatch[1], kind: CompletionItemKind.Method });
+      continue;
+    }
+
+    const propertyMatch = line.match(
+      /^\s*(?:public\s+|private\s+|protected\s+)?static\s+(?:readonly\s+)?([A-Za-z_]\w*)\s*(?::|=)/u,
+    );
+    if (propertyMatch) {
+      members.push({ name: propertyMatch[1], kind: CompletionItemKind.Field });
+    }
+  }
+
+  return dedupeMembers(members);
+}
+
 function createSymbol(
   document: TextDocument,
   lineIndex: number,
@@ -903,6 +1004,20 @@ function symbolKindLabel(symbolKind: SymbolKind): string {
 
 function displayDocumentName(uri: string): string {
   return decodeURIComponent(uri.split("/").at(-1) ?? uri);
+}
+
+function dedupeMembers(
+  members: Array<{ name: string; kind: CompletionItemKind }>,
+): Array<{ name: string; kind: CompletionItemKind }> {
+  const seen = new Set<string>();
+  return members.filter((member) => {
+    if (seen.has(member.name)) {
+      return false;
+    }
+
+    seen.add(member.name);
+    return true;
+  });
 }
 
 function isInsideQuotedString(line: string, index: number): boolean {

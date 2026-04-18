@@ -3,6 +3,7 @@ import { CompletionItemKind, Position, SymbolKind } from "vscode-languageserver/
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   buildCompletionItems,
+  buildClassMemberCompletionItems,
   buildImportCompletionItems,
   buildHover,
   buildLinkedRenameEdit,
@@ -21,6 +22,7 @@ import {
   findReferencesWithOptions,
   getImportBindingAtPosition,
   getImportContextAtPosition,
+  getMemberAccessContextAtPosition,
   getNamedImportContextAtPosition,
   getWordAtPosition,
 } from "../src/core.js";
@@ -269,6 +271,24 @@ describe("buildCompletionItems", () => {
     expect(items.some((item) => item.label === "@Entry")).toBe(true);
     expect(items.some((item) => item.label === "@Component")).toBe(true);
   });
+
+  it("builds class member completion items for static methods and fields", () => {
+    const document = makeDocument(
+      "file:///encode.ts",
+      [
+        "export class Encode {",
+        "  static readonly TAG = 'encode';",
+        "  static toHex(arr: Uint8Array): string { return ''; }",
+        "  private static toAscii(arr: Uint8Array): string { return ''; }",
+        "}",
+      ].join("\n"),
+    );
+
+    const items = buildClassMemberCompletionItems(document, "Encode", "to");
+
+    expect(items.map((item) => item.label)).toEqual(["toHex", "toAscii"]);
+    expect(items.every((item) => item.kind === CompletionItemKind.Method)).toBe(true);
+  });
 });
 
 describe("import helpers", () => {
@@ -317,6 +337,15 @@ describe("import helpers", () => {
 
     expect(context?.specifier).toBe("./helper");
     expect(context?.importedPrefix).toBe("hel");
+  });
+
+  it("detects member access contexts for completion", () => {
+    const document = makeDocument("file:///entry.ets", "Encode.to");
+
+    const context = getMemberAccessContextAtPosition(document, Position.create(0, 9));
+
+    expect(context?.receiver).toBe("Encode");
+    expect(context?.prefix).toBe("to");
   });
 
   it("builds file completion items for import suggestions", () => {

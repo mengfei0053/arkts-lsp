@@ -15,6 +15,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocuments } from "vscode-languageserver";
 import {
   buildImportCompletionItems,
+  buildClassMemberCompletionItems,
   buildLinkedRenameEdit,
   buildLinkedHover,
   buildNamedImportCompletionItems,
@@ -30,6 +31,7 @@ import {
   findReferencesWithOptions,
   getImportBindingAtPosition,
   getImportContextAtPosition,
+  getMemberAccessContextAtPosition,
   getNamedImportContextAtPosition,
   ServerSettings,
 } from "./core.js";
@@ -193,6 +195,31 @@ connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
   }
 
   const project = buildProjectContext(textDocument.uri, documents.all());
+  const memberAccessContext = getMemberAccessContextAtPosition(document, position);
+  if (memberAccessContext) {
+    const importBinding = getImportBindingAtPosition(
+      document,
+      {
+        line: memberAccessContext.range.start.line,
+        character: memberAccessContext.range.start.character + memberAccessContext.receiver.length - 1,
+      },
+    );
+    if (importBinding) {
+      const target = resolveRelativeModule(textDocument.uri, importBinding.specifier, project.documents);
+      if (target) {
+        const items = buildClassMemberCompletionItems(target, importBinding.importedName, memberAccessContext.prefix);
+        if (items.length > 0) {
+          return items;
+        }
+      }
+    }
+
+    const localItems = buildClassMemberCompletionItems(document, memberAccessContext.receiver, memberAccessContext.prefix);
+    if (localItems.length > 0) {
+      return localItems;
+    }
+  }
+
   const namedImportContext = getNamedImportContextAtPosition(document, position);
   if (namedImportContext) {
     const target = resolveRelativeModule(textDocument.uri, namedImportContext.specifier, project.documents);
