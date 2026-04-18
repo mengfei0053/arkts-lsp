@@ -9,10 +9,21 @@ The current goal of the repository is to provide a clean MVP that we can iterate
 - full text document sync
 - simple diagnostics
 - simple hover support
+- simple document/workspace symbols
+- simple definition lookup based on indexed declarations
 
 ## Status
 
 This is an early scaffold focused on establishing the server architecture and local developer workflow.
+
+Current capabilities:
+
+- incremental text synchronization
+- TODO and `any` diagnostics
+- hover preview for the current line
+- regex-based symbol extraction for common ArkTS/TypeScript declarations
+- workspace symbol search across open documents
+- basic definition lookup by symbol name
 
 ## Quick Start
 
