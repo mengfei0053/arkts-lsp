@@ -6,6 +6,8 @@ import {
   buildImportCompletionItems,
   buildHover,
   buildLinkedRenameEdit,
+  buildLinkedHover,
+  buildNamedImportCompletionItems,
   buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
@@ -19,6 +21,7 @@ import {
   findReferencesWithOptions,
   getImportBindingAtPosition,
   getImportContextAtPosition,
+  getNamedImportContextAtPosition,
   getWordAtPosition,
 } from "../src/core.js";
 
@@ -230,6 +233,22 @@ describe("buildHover", () => {
     const contents = hover?.contents;
     expect(typeof contents === "object" && "value" in contents ? contents.value : "").toContain("profileName");
   });
+
+  it("returns linked hover information for imported aliases", () => {
+    const exported = makeDocument("file:///helper.ts", "export function helper() {}");
+    const importer = makeDocument("file:///home.ets", "import { helper as loadHelper } from './helper';\nloadHelper();");
+    const hover = buildLinkedHover([exported, importer], importer, Position.create(1, 3), (documentUri, specifier) => {
+      if (documentUri === importer.uri && specifier === "./helper") {
+        return exported;
+      }
+
+      return null;
+    });
+
+    const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
+    expect(contents).toContain("Alias of `helper`");
+    expect(contents).toContain("helper.ts");
+  });
 });
 
 describe("buildCompletionItems", () => {
@@ -291,10 +310,28 @@ describe("import helpers", () => {
     expect(context?.specifier).toBe("./Encode");
   });
 
+  it("detects when the cursor is inside named import bindings", () => {
+    const document = makeDocument("file:///entry.ets", 'import { hel } from "./helper";');
+
+    const context = getNamedImportContextAtPosition(document, Position.create(0, 12));
+
+    expect(context?.specifier).toBe("./helper");
+    expect(context?.importedPrefix).toBe("hel");
+  });
+
   it("builds file completion items for import suggestions", () => {
     const items = buildImportCompletionItems(["./Encode", "../util/helper"]);
 
     expect(items.map((item) => item.label)).toEqual(["./Encode", "../util/helper"]);
+  });
+
+  it("builds named import completion items from exported symbols", () => {
+    const document = makeDocument("file:///entry.ets", 'import { hel } from "./helper";');
+    const target = makeDocument("file:///helper.ts", "export function helper() {}\nexport const helloValue = 1;\nconst hidden = true;");
+
+    const items = buildNamedImportCompletionItems(document, Position.create(0, 11), target);
+
+    expect(items.map((item) => item.label)).toEqual(["helper", "helloValue"]);
   });
 
   it("collects exported symbol locations by exported name", () => {

@@ -48,6 +48,15 @@ export type ImportContext = {
   };
 };
 
+export type NamedImportContext = {
+  specifier: string;
+  importedPrefix: string;
+  range: {
+    start: Position;
+    end: Position;
+  };
+};
+
 const arktsKeywords = [
   "import",
   "export",
@@ -98,6 +107,58 @@ export function buildHover(document: TextDocument, position: Position): Hover | 
       ].join("\n"),
     },
   };
+}
+
+export function buildLinkedHover(
+  documents: TextDocument[],
+  document: TextDocument,
+  position: Position,
+  resolveImportTarget: (documentUri: string, specifier: string) => TextDocument | null,
+): Hover | null {
+  const importBinding = getImportBindingAtPosition(document, position);
+  if (importBinding) {
+    const targetDocument = resolveImportTarget(document.uri, importBinding.specifier);
+    if (targetDocument) {
+      const exportedSymbol = collectDocumentSymbols(targetDocument).find((symbol) => symbol.name === importBinding.importedName);
+      if (exportedSymbol) {
+        return {
+          contents: {
+            kind: "markdown",
+            value: [
+              `### ${symbolKindLabel(exportedSymbol.kind)} \`${importBinding.localName}\``,
+              "",
+              importBinding.localName === importBinding.importedName
+                ? `Imported from \`${importBinding.specifier}\``
+                : `Alias of \`${importBinding.importedName}\` from \`${importBinding.specifier}\``,
+              "",
+              `Defined in \`${displayDocumentName(targetDocument.uri)}\``,
+            ].join("\n"),
+          },
+        };
+      }
+    }
+  }
+
+  const linkedTarget = resolveLinkedReferenceTarget(documents, document, position, resolveImportTarget);
+  if (linkedTarget) {
+    const exportedSymbol = collectDocumentSymbols(linkedTarget.exportedDocument).find(
+      (symbol) => symbol.name === linkedTarget.exportedName,
+    );
+    if (exportedSymbol) {
+      return {
+        contents: {
+          kind: "markdown",
+          value: [
+            `### ${symbolKindLabel(exportedSymbol.kind)} \`${linkedTarget.exportedName}\``,
+            "",
+            `Defined in \`${displayDocumentName(linkedTarget.exportedDocument.uri)}\``,
+          ].join("\n"),
+        },
+      };
+    }
+  }
+
+  return buildHover(document, position);
 }
 
 export function collectDiagnostics(textDocument: TextDocument, settings: ServerSettings): Diagnostic[] {
@@ -515,6 +576,30 @@ export function buildImportCompletionItems(specifiers: string[]): CompletionItem
   }));
 }
 
+export function buildNamedImportCompletionItems(
+  document: TextDocument,
+  position: Position,
+  targetDocument: TextDocument,
+): CompletionItem[] {
+  const context = getNamedImportContextAtPosition(document, position);
+  if (!context) {
+    return [];
+  }
+
+  const existingBindings = new Set(collectImportBindings(document).map((binding) => binding.importedName));
+  return collectDocumentSymbols(targetDocument)
+    .filter((symbol) => (collectExportedSymbolLocations(targetDocument).get(symbol.name) ?? []).length > 0)
+    .filter((symbol) => !existingBindings.has(symbol.name) || symbol.name.startsWith(context.importedPrefix))
+    .filter((symbol) => !context.importedPrefix || symbol.name.toLowerCase().startsWith(context.importedPrefix.toLowerCase()))
+    .slice(0, 100)
+    .map((symbol) => ({
+      label: symbol.name,
+      kind: mapSymbolKindToCompletionKind(symbol.kind),
+      detail: `Export from ${displayDocumentName(targetDocument.uri)}`,
+      insertText: symbol.name,
+    }));
+}
+
 export function getWordAtPosition(document: TextDocument, position: Position): string | null {
   const lineRange = {
     start: { line: position.line, character: 0 },
@@ -572,6 +657,41 @@ export function getImportContextAtPosition(document: TextDocument, position: Pos
       range: {
         start: { line: lineIndex, character: absoluteStart },
         end: { line: lineIndex, character: absoluteEnd },
+      },
+    };
+  }
+
+  return null;
+}
+
+export function getNamedImportContextAtPosition(document: TextDocument, position: Position): NamedImportContext | null {
+  const lines = document.getText().split(/\r?\n/u);
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const match = line.match(/^\s*import\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/u);
+    if (!match || match.index === undefined || position.line !== lineIndex) {
+      continue;
+    }
+
+    const clause = match[1];
+    const specifier = match[2];
+    const clauseStart = line.indexOf("{");
+    const clauseEnd = line.indexOf("}", clauseStart + 1);
+    if (clauseStart < 0 || clauseEnd < 0) {
+      continue;
+    }
+    if (position.character <= clauseStart || position.character > clauseEnd) {
+      continue;
+    }
+
+    const prefix = deriveNamedImportPrefix(clause, position.character - clauseStart - 1);
+    return {
+      specifier,
+      importedPrefix: prefix,
+      range: {
+        start: { line: lineIndex, character: clauseStart + 1 },
+        end: { line: lineIndex, character: clauseEnd },
       },
     };
   }
@@ -711,6 +831,14 @@ function getCompletionPrefix(document: TextDocument, position: Position): string
   return line.slice(start, safeCharacter);
 }
 
+function deriveNamedImportPrefix(clause: string, offset: number): string {
+  const safeOffset = Math.max(0, Math.min(offset, clause.length));
+  const beforeCursor = clause.slice(0, safeOffset);
+  const segment = beforeCursor.split(",").at(-1)?.trim() ?? "";
+  const aliasParts = segment.split(/\s+as\s+/u);
+  return (aliasParts.at(-1) ?? "").trim();
+}
+
 function createSymbol(
   document: TextDocument,
   lineIndex: number,
@@ -752,6 +880,29 @@ function mapSymbolKindToCompletionKind(symbolKind: SymbolKind): CompletionItemKi
     default:
       return CompletionItemKind.Text;
   }
+}
+
+function symbolKindLabel(symbolKind: SymbolKind): string {
+  switch (symbolKind) {
+    case SymbolKind.Class:
+      return "Class";
+    case SymbolKind.Interface:
+      return "Interface";
+    case SymbolKind.Enum:
+      return "Enum";
+    case SymbolKind.Function:
+      return "Function";
+    case SymbolKind.Variable:
+      return "Variable";
+    case SymbolKind.TypeParameter:
+      return "Type";
+    default:
+      return "Symbol";
+  }
+}
+
+function displayDocumentName(uri: string): string {
+  return decodeURIComponent(uri.split("/").at(-1) ?? uri);
 }
 
 function isInsideQuotedString(line: string, index: number): boolean {

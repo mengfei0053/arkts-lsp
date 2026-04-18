@@ -24,15 +24,14 @@
 
 - 增量文本同步
 - `TODO` 和 `any` 的基础诊断
-- 当前行悬浮信息
+- 基础悬浮信息，以及 import/export 感知的符号悬浮
 - 基于正则的 ArkTS/TypeScript 常见声明符号提取
 - 文档符号和工作区符号搜索
 - 基于符号名的基础定义跳转
-- 基于精确标识符匹配的引用查询
-- 基于 ArkTS 关键字和工作区符号的轻量补全
+- import/export 感知的 definition、references、rename
+- 基于 ArkTS 关键字、工作区符号和命名 import 导出的轻量补全
 - 相对 import 路径的模块解析与路径补全
 - 当前文档中的标识符高亮
-- 基于精确标识符匹配生成 `WorkspaceEdit` 的重命名
 - ArkTS/HarmonyOS 项目根识别
 - `.ets` / `.ts` 文件扫描与项目级文档加载
 - 相对 import 路径 definition 跳转
@@ -46,6 +45,7 @@
 - 稳定 LSP 服务端生命周期
 - 提升可测试性
 - 逐步从“文本级匹配”升级为“ArkTS 项目级感知”
+- 优先做实 import/export 相关的导航、重命名和补全体验
 - 面向真实鸿蒙项目逐步验证 `opencode` 接入
 
 ## 快速开始

@@ -20,15 +20,14 @@ The repository is currently focused on a clean, iterative MVP:
 
 - incremental text synchronization
 - TODO and `any` diagnostics
-- hover preview for the current line
+- basic hover plus import/export-aware symbol hover
 - regex-based symbol extraction for common ArkTS/TypeScript declarations
 - document symbols and workspace symbols
 - basic definition lookup by symbol name
-- exact-word reference lookup across open documents
-- lightweight completion from ArkTS keywords and indexed workspace symbols
+- import/export-aware definition, references, and rename
+- lightweight completion from ArkTS keywords, indexed workspace symbols, and named-import exports
 - relative import path resolution and path completion
 - exact-word document highlights in the current file
-- workspace rename edits for exact-word matches in open documents
 - ArkTS/HarmonyOS project root detection
 - `.ets` / `.ts` file scanning and project-level document loading
 - definition jumps on relative import specifiers
@@ -42,6 +41,7 @@ This is still an early scaffold focused on:
 - stabilizing the server lifecycle
 - improving testability
 - gradually moving from text-level matching to ArkTS project-aware behavior
+- prioritizing import/export-aware navigation, rename, and completion flows
 - validating `opencode` integration against real HarmonyOS projects
 
 ## Quick Start

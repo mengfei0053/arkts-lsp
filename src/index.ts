@@ -16,8 +16,9 @@ import { TextDocuments } from "vscode-languageserver";
 import {
   buildImportCompletionItems,
   buildLinkedRenameEdit,
+  buildLinkedHover,
+  buildNamedImportCompletionItems,
   buildCompletionItems,
-  buildHover,
   buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
@@ -29,6 +30,7 @@ import {
   findReferencesWithOptions,
   getImportBindingAtPosition,
   getImportContextAtPosition,
+  getNamedImportContextAtPosition,
   ServerSettings,
 } from "./core.js";
 import {
@@ -95,7 +97,10 @@ connection.onHover(({ textDocument, position }): Hover | null => {
     return null;
   }
 
-  return buildHover(document, position);
+  const project = buildProjectContext(textDocument.uri, documents.all());
+  return buildLinkedHover(project.documents, document, position, (documentUri, specifier) =>
+    resolveRelativeModule(documentUri, specifier, project.documents),
+  );
 });
 
 connection.onDocumentSymbol(({ textDocument }) => {
@@ -188,6 +193,14 @@ connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
   }
 
   const project = buildProjectContext(textDocument.uri, documents.all());
+  const namedImportContext = getNamedImportContextAtPosition(document, position);
+  if (namedImportContext) {
+    const target = resolveRelativeModule(textDocument.uri, namedImportContext.specifier, project.documents);
+    if (target) {
+      return buildNamedImportCompletionItems(document, position, target);
+    }
+  }
+
   const importContext = getImportContextAtPosition(document, position);
   if (importContext) {
     return buildImportCompletionItems(listRelativeModuleSpecifiers(textDocument.uri, importContext.specifier, project.documents));
