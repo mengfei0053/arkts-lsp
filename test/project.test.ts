@@ -8,6 +8,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   collectDocumentSymbols,
   collectExportedSymbolLocations,
+  buildLinkedRenameEdit,
   findLinkedReferences,
   findDefinitions,
   findReferences,
@@ -204,6 +205,41 @@ describe("project-aware navigation", () => {
     expect(references).toHaveLength(6);
     expect(references.some((location) => location.uri.endsWith("/Home.ets") && location.range.start.line === 1)).toBe(true);
     expect(references.some((location) => location.uri.endsWith("/Profile.ets") && location.range.start.line === 1)).toBe(true);
+  });
+
+  it("builds a linked rename edit from an exported symbol across project imports", () => {
+    const project = createProject({
+      "AppScope/app.json5": "{}",
+      "hvigorfile.ts": "export default {};",
+      "entry/src/main/ets/pages/Home.ets": "import { helper as loadHelper } from '../util/helper';\nloadHelper();",
+      "entry/src/main/ets/pages/Profile.ets": "import { helper } from '../util/helper';\nhelper();",
+      "entry/src/main/ets/util/helper.ts": "export function helper() {}\nhelper();",
+    });
+
+    const helperUri = pathToFileURL(join(project, "entry/src/main/ets/util/helper.ts")).toString();
+    const helper = TextDocument.create(helperUri, "typescript", 1, "export function helper() {}\nhelper();");
+    const context = buildProjectContext(helperUri, [helper]);
+
+    const edit = buildLinkedRenameEdit(
+      context.documents,
+      helper,
+      { line: 0, character: 17 },
+      "serialHelper",
+      (documentUri, specifier) => resolveRelativeModule(documentUri, specifier, context.documents),
+    );
+
+    expect(edit).not.toBeNull();
+    expect(edit?.changes?.[helperUri]).toHaveLength(2);
+    expect(
+      Object.entries(edit?.changes ?? {}).some(
+        ([uri, entries]) => uri.endsWith("/Home.ets") && entries.length === 1 && entries[0].newText === "serialHelper",
+      ),
+    ).toBe(true);
+    expect(
+      Object.entries(edit?.changes ?? {}).some(
+        ([uri, entries]) => uri.endsWith("/Profile.ets") && entries.length === 2 && entries[0].newText === "serialHelper",
+      ),
+    ).toBe(true);
   });
 
   it("finds references across files in the same project context", () => {

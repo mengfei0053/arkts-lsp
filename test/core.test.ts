@@ -5,6 +5,7 @@ import {
   buildCompletionItems,
   buildImportCompletionItems,
   buildHover,
+  buildLinkedRenameEdit,
   buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
@@ -178,6 +179,44 @@ describe("workspace navigation helpers", () => {
     expect(edit?.changes?.["file:///first.ets"]).toHaveLength(2);
     expect(edit?.changes?.["file:///second.ets"]).toHaveLength(1);
     expect(edit?.changes?.["file:///first.ets"]?.[0].newText).toBe("loadAccount");
+  });
+
+  it("renames an exported symbol across import bindings and same-name usages", () => {
+    const exported = makeDocument("file:///helper.ts", "export function helper() {}\nhelper();");
+    const importer = makeDocument("file:///home.ets", "import { helper } from './helper';\nhelper();");
+    const documents = [exported, importer];
+
+    const edit = buildLinkedRenameEdit(documents, exported, Position.create(0, 17), "loadHelper", (documentUri, specifier) => {
+      if (documentUri === importer.uri && specifier === "./helper") {
+        return exported;
+      }
+
+      return null;
+    });
+
+    expect(edit).not.toBeNull();
+    expect(edit?.changes?.["file:///helper.ts"]).toHaveLength(2);
+    expect(edit?.changes?.["file:///home.ets"]).toHaveLength(2);
+    expect(edit?.changes?.["file:///home.ets"]?.every((entry) => entry.newText === "loadHelper")).toBe(true);
+  });
+
+  it("renames only the local alias chain when the cursor is on an aliased import", () => {
+    const exported = makeDocument("file:///helper.ts", "export function helper() {}\nhelper();");
+    const importer = makeDocument("file:///home.ets", "import { helper as loadHelper } from './helper';\nloadHelper();");
+    const documents = [exported, importer];
+
+    const edit = buildLinkedRenameEdit(documents, importer, Position.create(0, 21), "runHelper", (documentUri, specifier) => {
+      if (documentUri === importer.uri && specifier === "./helper") {
+        return exported;
+      }
+
+      return null;
+    });
+
+    expect(edit).not.toBeNull();
+    expect(edit?.changes?.["file:///home.ets"]).toHaveLength(2);
+    expect(edit?.changes?.["file:///helper.ts"]).toBeUndefined();
+    expect(edit?.changes?.["file:///home.ets"]?.every((entry) => entry.newText === "runHelper")).toBe(true);
   });
 });
 

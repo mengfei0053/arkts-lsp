@@ -429,6 +429,48 @@ export function buildRenameEdit(
   return Object.keys(changes).length > 0 ? { changes } : null;
 }
 
+export function buildLinkedRenameEdit(
+  documents: TextDocument[],
+  document: TextDocument,
+  position: Position,
+  newName: string,
+  resolveImportTarget: (documentUri: string, specifier: string) => TextDocument | null,
+): WorkspaceEdit | null {
+  const trimmedName = newName.trim();
+  if (!trimmedName) {
+    return null;
+  }
+
+  const importBinding = getImportBindingAtPosition(document, position);
+  if (importBinding && importBinding.importedName !== importBinding.localName) {
+    return buildAliasRenameEdit(documents, document, importBinding, position, trimmedName);
+  }
+
+  const target = resolveLinkedReferenceTarget(documents, document, position, resolveImportTarget);
+  if (!target || target.exportedName === trimmedName) {
+    return null;
+  }
+
+  const changes: Record<string, TextEdit[]> = {};
+  addEdits(changes, target.exportedDocument.uri, collectWordLocations(target.exportedDocument, target.exportedName), trimmedName);
+
+  for (const candidate of documents) {
+    const bindings = collectImportBindings(candidate).filter((binding) => {
+      const targetDocument = resolveImportTarget(candidate.uri, binding.specifier);
+      return targetDocument?.uri === target.exportedDocument.uri && binding.importedName === target.exportedName;
+    });
+
+    for (const binding of bindings) {
+      addEdits(changes, candidate.uri, [toLocation(candidate.uri, binding.range)], trimmedName);
+      if (binding.localName === binding.importedName) {
+        addEdits(changes, candidate.uri, collectWordLocations(candidate, binding.localName), trimmedName);
+      }
+    }
+  }
+
+  return Object.keys(changes).length > 0 ? { changes: dedupeTextEdits(changes) } : null;
+}
+
 export function buildCompletionItems(documents: TextDocument[], document: TextDocument, position: Position): CompletionItem[] {
   const prefix = getCompletionPrefix(document, position).toLowerCase();
   const seen = new Set<string>();
@@ -576,6 +618,25 @@ function collectLinkedImportReferences(
   return bindings.flatMap((binding) => collectWordLocations(document, binding.localName));
 }
 
+function buildAliasRenameEdit(
+  documents: TextDocument[],
+  document: TextDocument,
+  binding: ImportBinding,
+  position: Position,
+  newName: string,
+): WorkspaceEdit | null {
+  const aliasPosition = isPositionWithinRange(position, binding.range);
+  const currentName = aliasPosition ? binding.localName : getWordAtPosition(document, position);
+  if (!currentName || currentName === newName) {
+    return null;
+  }
+
+  const changes: Record<string, TextEdit[]> = {};
+  addEdits(changes, document.uri, collectWordLocations(document, binding.localName), newName);
+
+  return Object.keys(changes).length > 0 ? { changes: dedupeTextEdits(changes) } : null;
+}
+
 function resolveLinkedReferenceTarget(
   documents: TextDocument[],
   document: TextDocument,
@@ -716,6 +777,44 @@ function countUnescaped(text: string, quote: string): number {
 
 function locationKey(location: Location): string {
   return `${location.uri}:${location.range.start.line}:${location.range.start.character}:${location.range.end.line}:${location.range.end.character}`;
+}
+
+function addEdits(changes: Record<string, TextEdit[]>, uri: string, locations: Location[], newText: string): void {
+  if (locations.length === 0) {
+    return;
+  }
+
+  const current = changes[uri] ?? [];
+  current.push(
+    ...locations.map((location) => ({
+      range: location.range,
+      newText,
+    })),
+  );
+  changes[uri] = current;
+}
+
+function dedupeTextEdits(changes: Record<string, TextEdit[]>): Record<string, TextEdit[]> {
+  return Object.fromEntries(
+    Object.entries(changes).map(([uri, edits]) => {
+      const seen = new Set<string>();
+      const uniqueEdits = edits.filter((edit) => {
+        const key = `${uri}:${edit.range.start.line}:${edit.range.start.character}:${edit.range.end.line}:${edit.range.end.character}:${edit.newText}`;
+        if (seen.has(key)) {
+          return false;
+        }
+
+        seen.add(key);
+        return true;
+      });
+
+      return [uri, uniqueEdits];
+    }),
+  );
+}
+
+function toLocation(uri: string, range: { start: Position; end: Position }): Location {
+  return { uri, range };
 }
 
 function dedupeLocations(locations: Location[]): Location[] {

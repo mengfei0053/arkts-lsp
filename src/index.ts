@@ -15,6 +15,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocuments } from "vscode-languageserver";
 import {
   buildImportCompletionItems,
+  buildLinkedRenameEdit,
   buildCompletionItems,
   buildHover,
   buildRenameEdit,
@@ -201,7 +202,19 @@ connection.onRenameRequest(({ textDocument, position, newName }): WorkspaceEdit 
     return null;
   }
 
-  return buildRenameEdit(buildProjectContext(textDocument.uri, documents.all()).documents, document, position, newName);
+  const project = buildProjectContext(textDocument.uri, documents.all());
+  const linkedEdit = buildLinkedRenameEdit(
+    project.documents,
+    document,
+    position,
+    newName,
+    (documentUri, specifier) => resolveRelativeModule(documentUri, specifier, project.documents),
+  );
+  if (linkedEdit) {
+    return linkedEdit;
+  }
+
+  return buildRenameEdit(project.documents, document, position, newName);
 });
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
