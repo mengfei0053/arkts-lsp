@@ -16,12 +16,14 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 - Favor extracting pure functions into focused modules before adding new protocol handlers.
 - Add or update tests for behavior changes whenever practical.
 - Update the nearest relevant `AGENTS.md` when directory responsibilities, conventions, or workflows change.
+- Keep `.ts` source and test files at 400 lines or fewer. If a file starts pushing past that limit, split it before adding more behavior.
 
 ## Code Style
 
 - Use TypeScript with strict typing.
 - Prefer small functions with explicit inputs and outputs.
 - Keep LSP wiring thin and move reusable logic into `src/core.ts` or similar modules.
+- Prefer adding focused modules over growing existing large files.
 - Avoid adding heavy dependencies unless they unlock clear ArkTS or LSP value.
 
 ## Validation
