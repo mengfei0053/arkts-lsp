@@ -39,6 +39,18 @@ npm run start
 - `npm run dev`: run the server with `tsx`
 - `npm run start`: run the compiled server
 - `npm run check`: type-check without emitting files
+- `npm test`: run the unit test suite with Vitest
+
+## Testing
+
+Current tests cover the core behaviors that are easiest to regress while the server is still evolving:
+
+- diagnostics extraction
+- symbol extraction
+- word lookup at a cursor position
+- workspace symbol filtering
+- basic definition resolution
+- hover formatting
 
 ## Roadmap
 
