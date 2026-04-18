@@ -13,6 +13,8 @@ The current goal of the repository is to provide a clean MVP that we can iterate
 - simple definition lookup based on indexed declarations
 - simple references lookup based on exact identifier matches
 - simple completion from ArkTS keywords and indexed workspace symbols
+- simple document highlight for exact identifier matches
+- simple rename that produces workspace edits from exact identifier matches
 
 ## Status
 
@@ -28,6 +30,8 @@ Current capabilities:
 - basic definition lookup by symbol name
 - exact-word reference lookup across open documents
 - lightweight keyword and symbol completion suggestions
+- exact-word document highlights in the current file
+- workspace rename edits for exact-word matches in open documents
 
 ## Quick Start
 

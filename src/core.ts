@@ -3,12 +3,15 @@ import {
   CompletionItemKind,
   Diagnostic,
   DiagnosticSeverity,
+  DocumentHighlight,
+  DocumentHighlightKind,
   Hover,
   Location,
   Position,
-  Range,
   SymbolInformation,
   SymbolKind,
+  TextEdit,
+  WorkspaceEdit,
   WorkspaceSymbol,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -207,6 +210,46 @@ export function findReferences(documents: TextDocument[], document: TextDocument
   }
 
   return documents.flatMap((candidate) => collectWordLocations(candidate, word));
+}
+
+export function findDocumentHighlights(document: TextDocument, position: Position): DocumentHighlight[] {
+  const word = getWordAtPosition(document, position);
+  if (!word) {
+    return [];
+  }
+
+  return collectWordLocations(document, word).map((location) => ({
+    range: location.range,
+    kind: DocumentHighlightKind.Text,
+  }));
+}
+
+export function buildRenameEdit(
+  documents: TextDocument[],
+  document: TextDocument,
+  position: Position,
+  newName: string,
+): WorkspaceEdit | null {
+  const oldName = getWordAtPosition(document, position);
+  if (!oldName || !newName.trim() || oldName === newName) {
+    return null;
+  }
+
+  const changes: Record<string, TextEdit[]> = {};
+
+  for (const candidate of documents) {
+    const locations = collectWordLocations(candidate, oldName);
+    if (locations.length === 0) {
+      continue;
+    }
+
+    changes[candidate.uri] = locations.map((location) => ({
+      range: location.range,
+      newText: newName,
+    }));
+  }
+
+  return Object.keys(changes).length > 0 ? { changes } : null;
 }
 
 export function buildCompletionItems(documents: TextDocument[], document: TextDocument, position: Position): CompletionItem[] {

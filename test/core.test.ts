@@ -4,10 +4,12 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   buildCompletionItems,
   buildHover,
+  buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
   collectWorkspaceSymbols,
   findDefinitions,
+  findDocumentHighlights,
   findReferences,
   getWordAtPosition,
 } from "../src/core.js";
@@ -129,6 +131,33 @@ describe("workspace navigation helpers", () => {
       "file:///first.ets",
       "file:///second.ets",
     ]);
+  });
+
+  it("finds highlights within the current document", () => {
+    const document = makeDocument(
+      "file:///first.ets",
+      ["export function loadProfile() {}", "const value = loadProfile();", "loadProfile();"].join("\n"),
+    );
+
+    const highlights = findDocumentHighlights(document, Position.create(1, 20));
+
+    expect(highlights).toHaveLength(3);
+    expect(highlights[0].kind).toBeDefined();
+  });
+
+  it("builds a workspace edit for renaming references", () => {
+    const first = makeDocument(
+      "file:///first.ets",
+      ["export function loadProfile() {}", "const value = loadProfile();"].join("\n"),
+    );
+    const second = makeDocument("file:///second.ets", "loadProfile();");
+
+    const edit = buildRenameEdit([first, second], first, Position.create(1, 20), "loadAccount");
+
+    expect(edit).not.toBeNull();
+    expect(edit?.changes?.["file:///first.ets"]).toHaveLength(2);
+    expect(edit?.changes?.["file:///second.ets"]).toHaveLength(1);
+    expect(edit?.changes?.["file:///first.ets"]?.[0].newText).toBe("loadAccount");
   });
 });
 

@@ -2,22 +2,26 @@ import {
   CompletionItem,
   createConnection,
   DidChangeConfigurationNotification,
+  DocumentHighlight,
   Hover,
   InitializeParams,
   InitializeResult,
   Location,
   ProposedFeatures,
   TextDocumentSyncKind,
+  WorkspaceEdit,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocuments } from "vscode-languageserver";
 import {
   buildCompletionItems,
   buildHover,
+  buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
   collectWorkspaceSymbols,
   findDefinitions,
+  findDocumentHighlights,
   findReferences,
   ServerSettings,
 } from "./core.js";
@@ -40,6 +44,10 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       hoverProvider: true,
       definitionProvider: true,
       referencesProvider: true,
+      documentHighlightProvider: true,
+      renameProvider: {
+        prepareProvider: false,
+      },
       documentSymbolProvider: true,
       workspaceSymbolProvider: true,
       completionProvider: {
@@ -111,6 +119,15 @@ connection.onReferences(({ textDocument, position }): Location[] => {
   return findReferences(documents.all(), document, position);
 });
 
+connection.onDocumentHighlight(({ textDocument, position }): DocumentHighlight[] => {
+  const document = documents.get(textDocument.uri);
+  if (!document) {
+    return [];
+  }
+
+  return findDocumentHighlights(document, position);
+});
+
 connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
   const document = documents.get(textDocument.uri);
   if (!document) {
@@ -118,6 +135,15 @@ connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
   }
 
   return buildCompletionItems(documents.all(), document, position);
+});
+
+connection.onRenameRequest(({ textDocument, position, newName }): WorkspaceEdit | null => {
+  const document = documents.get(textDocument.uri);
+  if (!document) {
+    return null;
+  }
+
+  return buildRenameEdit(documents.all(), document, position, newName);
 });
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
