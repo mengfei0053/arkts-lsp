@@ -13,6 +13,7 @@ import {
   collectWorkspaceSymbols,
   findDefinitions,
   findDocumentHighlights,
+  findLinkedReferences,
   findReferences,
   findReferencesWithOptions,
   getImportBindingAtPosition,
@@ -268,5 +269,44 @@ describe("import helpers", () => {
     expect(exports.get("helper")).toHaveLength(1);
     expect(exports.get("HelperService")).toHaveLength(1);
     expect(exports.has("hidden")).toBe(false);
+  });
+
+  it("finds linked references from an imported alias back to the exported symbol", () => {
+    const exported = makeDocument("file:///helper.ts", "export function helper() {}\nhelper();");
+    const importer = makeDocument("file:///home.ets", "import { helper as loadHelper } from './helper';\nloadHelper();");
+    const documents = [exported, importer];
+
+    const references = findLinkedReferences(documents, importer, Position.create(1, 3), true, (documentUri, specifier) => {
+      if (documentUri === importer.uri && specifier === "./helper") {
+        return exported;
+      }
+
+      return null;
+    });
+
+    expect(references).toHaveLength(4);
+    expect(references.map((location) => location.uri)).toEqual([
+      "file:///helper.ts",
+      "file:///helper.ts",
+      "file:///home.ets",
+      "file:///home.ets",
+    ]);
+  });
+
+  it("can omit only the exported declaration from linked references", () => {
+    const exported = makeDocument("file:///helper.ts", "export function helper() {}\nhelper();");
+    const importer = makeDocument("file:///home.ets", "import { helper as loadHelper } from './helper';\nloadHelper();");
+    const documents = [exported, importer];
+
+    const references = findLinkedReferences(documents, exported, Position.create(0, 17), false, (documentUri, specifier) => {
+      if (documentUri === importer.uri && specifier === "./helper") {
+        return exported;
+      }
+
+      return null;
+    });
+
+    expect(references).toHaveLength(3);
+    expect(references.every((location) => !(location.uri === "file:///helper.ts" && location.range.start.line === 0))).toBe(true);
   });
 });

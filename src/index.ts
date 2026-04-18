@@ -24,7 +24,7 @@ import {
   collectWorkspaceSymbols,
   findDefinitions,
   findDocumentHighlights,
-  findReferences,
+  findLinkedReferences,
   findReferencesWithOptions,
   getImportBindingAtPosition,
   getImportContextAtPosition,
@@ -156,12 +156,19 @@ connection.onReferences(({ textDocument, position, context }): Location[] => {
     return [];
   }
 
-  return findReferencesWithOptions(
-    buildProjectContext(textDocument.uri, documents.all()).documents,
+  const project = buildProjectContext(textDocument.uri, documents.all());
+  const linkedReferences = findLinkedReferences(
+    project.documents,
     document,
     position,
     context.includeDeclaration ?? true,
+    (documentUri, specifier) => resolveRelativeModule(documentUri, specifier, project.documents),
   );
+  if (linkedReferences.length > 0) {
+    return linkedReferences;
+  }
+
+  return findReferencesWithOptions(project.documents, document, position, context.includeDeclaration ?? true);
 });
 
 connection.onDocumentHighlight(({ textDocument, position }): DocumentHighlight[] => {

@@ -25,6 +25,11 @@ type DefinitionContext = {
   symbols: SymbolInformation[];
 };
 
+type LinkedReferenceTarget = {
+  exportedName: string;
+  exportedDocument: TextDocument;
+};
+
 export type ImportBinding = {
   importedName: string;
   localName: string;
@@ -355,6 +360,35 @@ export function findReferencesWithOptions(
   return references.filter((location) => !declarationKeys.has(locationKey(location)));
 }
 
+export function findLinkedReferences(
+  documents: TextDocument[],
+  document: TextDocument,
+  position: Position,
+  includeDeclaration: boolean,
+  resolveImportTarget: (documentUri: string, specifier: string) => TextDocument | null,
+): Location[] {
+  const target = resolveLinkedReferenceTarget(documents, document, position, resolveImportTarget);
+  if (!target) {
+    return [];
+  }
+
+  const references = [
+    ...collectWordLocations(target.exportedDocument, target.exportedName),
+    ...documents.flatMap((candidate) => collectLinkedImportReferences(candidate, target, resolveImportTarget)),
+  ];
+
+  const uniqueReferences = dedupeLocations(references);
+  if (includeDeclaration) {
+    return uniqueReferences;
+  }
+
+  const declarationKeys = new Set(
+    (collectExportedSymbolLocations(target.exportedDocument).get(target.exportedName) ?? []).map((location) => locationKey(location)),
+  );
+
+  return uniqueReferences.filter((location) => !declarationKeys.has(locationKey(location)));
+}
+
 export function findDocumentHighlights(document: TextDocument, position: Position): DocumentHighlight[] {
   const word = getWordAtPosition(document, position);
   if (!word) {
@@ -529,6 +563,77 @@ function collectWordLocations(document: TextDocument, word: string): Location[] 
   return locations;
 }
 
+function collectLinkedImportReferences(
+  document: TextDocument,
+  target: LinkedReferenceTarget,
+  resolveImportTarget: (documentUri: string, specifier: string) => TextDocument | null,
+): Location[] {
+  const bindings = collectImportBindings(document).filter((binding) => {
+    const resolvedTarget = resolveImportTarget(document.uri, binding.specifier);
+    return resolvedTarget?.uri === target.exportedDocument.uri && binding.importedName === target.exportedName;
+  });
+
+  return bindings.flatMap((binding) => collectWordLocations(document, binding.localName));
+}
+
+function resolveLinkedReferenceTarget(
+  documents: TextDocument[],
+  document: TextDocument,
+  position: Position,
+  resolveImportTarget: (documentUri: string, specifier: string) => TextDocument | null,
+): LinkedReferenceTarget | null {
+  const bindingAtPosition = getImportBindingAtPosition(document, position);
+  if (bindingAtPosition) {
+    const targetDocument = resolveImportTarget(document.uri, bindingAtPosition.specifier);
+    if (targetDocument) {
+      return {
+        exportedName: bindingAtPosition.importedName,
+        exportedDocument: targetDocument,
+      };
+    }
+  }
+
+  const word = getWordAtPosition(document, position);
+  if (!word) {
+    return null;
+  }
+
+  const importedBinding = collectImportBindings(document).find((binding) => binding.localName === word);
+  if (importedBinding) {
+    const targetDocument = resolveImportTarget(document.uri, importedBinding.specifier);
+    if (targetDocument) {
+      return {
+        exportedName: importedBinding.importedName,
+        exportedDocument: targetDocument,
+      };
+    }
+  }
+
+  const exportedLocations = collectExportedSymbolLocations(document).get(word) ?? [];
+  if (exportedLocations.some((location) => isPositionWithinRange(position, location.range))) {
+    return {
+      exportedName: word,
+      exportedDocument: document,
+    };
+  }
+
+  const importedDocuments = documents.filter((candidate) =>
+    collectImportBindings(candidate).some((binding) => {
+      const targetDocument = resolveImportTarget(candidate.uri, binding.specifier);
+      return targetDocument?.uri === document.uri && binding.importedName === word;
+    }),
+  );
+
+  if (importedDocuments.length > 0 && exportedLocations.length > 0) {
+    return {
+      exportedName: word,
+      exportedDocument: document,
+    };
+  }
+
+  return null;
+}
+
 function getCompletionPrefix(document: TextDocument, position: Position): string {
   const lineRange = {
     start: { line: position.line, character: 0 },
@@ -611,6 +716,34 @@ function countUnescaped(text: string, quote: string): number {
 
 function locationKey(location: Location): string {
   return `${location.uri}:${location.range.start.line}:${location.range.start.character}:${location.range.end.line}:${location.range.end.character}`;
+}
+
+function dedupeLocations(locations: Location[]): Location[] {
+  const seen = new Set<string>();
+
+  return locations.filter((location) => {
+    const key = locationKey(location);
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function isPositionWithinRange(position: Position, range: { start: Position; end: Position }): boolean {
+  if (position.line < range.start.line || position.line > range.end.line) {
+    return false;
+  }
+  if (position.line === range.start.line && position.character < range.start.character) {
+    return false;
+  }
+  if (position.line === range.end.line && position.character > range.end.character) {
+    return false;
+  }
+
+  return true;
 }
 
 function escapeRegExp(value: string): string {

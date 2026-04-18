@@ -8,6 +8,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   collectDocumentSymbols,
   collectExportedSymbolLocations,
+  findLinkedReferences,
   findDefinitions,
   findReferences,
   findReferencesWithOptions,
@@ -177,6 +178,32 @@ describe("project-aware navigation", () => {
     expect(target?.uri.endsWith("/helper.ts")).toBe(true);
     expect(exports).toHaveLength(1);
     expect(exports[0].uri.endsWith("/helper.ts")).toBe(true);
+  });
+
+  it("finds linked references across exported symbols and import aliases", () => {
+    const project = createProject({
+      "AppScope/app.json5": "{}",
+      "hvigorfile.ts": "export default {};",
+      "entry/src/main/ets/pages/Home.ets": "import { helper as loadHelper } from '../util/helper';\nloadHelper();",
+      "entry/src/main/ets/pages/Profile.ets": "import { helper } from '../util/helper';\nhelper();",
+      "entry/src/main/ets/util/helper.ts": "export function helper() {}\nhelper();",
+    });
+
+    const helperUri = pathToFileURL(join(project, "entry/src/main/ets/util/helper.ts")).toString();
+    const helper = TextDocument.create(helperUri, "typescript", 1, "export function helper() {}\nhelper();");
+    const context = buildProjectContext(helperUri, [helper]);
+
+    const references = findLinkedReferences(
+      context.documents,
+      helper,
+      { line: 0, character: 17 },
+      true,
+      (documentUri, specifier) => resolveRelativeModule(documentUri, specifier, context.documents),
+    );
+
+    expect(references).toHaveLength(6);
+    expect(references.some((location) => location.uri.endsWith("/Home.ets") && location.range.start.line === 1)).toBe(true);
+    expect(references.some((location) => location.uri.endsWith("/Profile.ets") && location.range.start.line === 1)).toBe(true);
   });
 
   it("finds references across files in the same project context", () => {
