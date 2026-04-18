@@ -8,6 +8,7 @@ import {
   InitializeResult,
   Location,
   ProposedFeatures,
+  SignatureHelp,
   TextDocumentSyncKind,
   WorkspaceEdit,
 } from "vscode-languageserver/node.js";
@@ -19,6 +20,7 @@ import {
   buildLinkedRenameEdit,
   buildLinkedHover,
   buildNamedImportCompletionItems,
+  buildSignatureHelp,
   buildCompletionItems,
   buildRenameEdit,
   collectDiagnostics,
@@ -70,6 +72,9 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       completionProvider: {
         resolveProvider: false,
         triggerCharacters: [".", "@", ":"],
+      },
+      signatureHelpProvider: {
+        triggerCharacters: ["(", ","],
       },
     },
   };
@@ -255,6 +260,18 @@ connection.onRenameRequest(({ textDocument, position, newName }): WorkspaceEdit 
   }
 
   return buildRenameEdit(project.documents, document, position, newName);
+});
+
+connection.onSignatureHelp(({ textDocument, position }): SignatureHelp | null => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  if (!document) {
+    return null;
+  }
+
+  const project = buildProjectContext(textDocument.uri, documents.all());
+  return buildSignatureHelp(project.documents, document, position, (documentUri, specifier) =>
+    resolveRelativeModule(documentUri, specifier, project.documents),
+  );
 });
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {

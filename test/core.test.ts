@@ -9,6 +9,7 @@ import {
   buildLinkedRenameEdit,
   buildLinkedHover,
   buildNamedImportCompletionItems,
+  buildSignatureHelp,
   buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
@@ -21,6 +22,7 @@ import {
   findReferences,
   findReferencesWithOptions,
   getImportBindingAtPosition,
+  getCallContextAtPosition,
   getImportContextAtPosition,
   getMemberAccessContextAtPosition,
   getNamedImportContextAtPosition,
@@ -289,6 +291,31 @@ describe("buildCompletionItems", () => {
     expect(items.map((item) => item.label)).toEqual(["toHex", "toAscii"]);
     expect(items.every((item) => item.kind === CompletionItemKind.Method)).toBe(true);
   });
+
+  it("builds signature help for imported class methods", () => {
+    const exported = makeDocument("file:///encode.ts", "export class Encode {\n  static encodeUtf8(s: string): Uint8Array { return new Uint8Array(); }\n}");
+    const importer = makeDocument("file:///entry.ets", "import { Encode } from './encode';\nEncode.encodeUtf8(cmd");
+
+    const signature = buildSignatureHelp([exported, importer], importer, Position.create(1, 21), (documentUri, specifier) => {
+      if (documentUri === importer.uri && specifier === "./encode") {
+        return exported;
+      }
+
+      return null;
+    });
+
+    expect(signature?.signatures[0].label).toBe("Encode.encodeUtf8(s: string): Uint8Array");
+    expect(signature?.activeParameter).toBe(0);
+  });
+
+  it("tracks the active parameter for top-level function calls", () => {
+    const document = makeDocument("file:///entry.ets", "export function sum(a: number, b: number): number { return a + b; }\nsum(first, second");
+
+    const signature = buildSignatureHelp([document], document, Position.create(1, 17), () => null);
+
+    expect(signature?.signatures[0].label).toBe("sum(a: number, b: number): number");
+    expect(signature?.activeParameter).toBe(1);
+  });
 });
 
 describe("import helpers", () => {
@@ -346,6 +373,15 @@ describe("import helpers", () => {
 
     expect(context?.receiver).toBe("Encode");
     expect(context?.prefix).toBe("to");
+  });
+
+  it("detects call contexts for signature help", () => {
+    const document = makeDocument("file:///entry.ets", "Encode.encodeUtf8(cmd, more");
+
+    const context = getCallContextAtPosition(document, Position.create(0, 26));
+
+    expect(context?.callee).toBe("Encode.encodeUtf8");
+    expect(context?.argumentIndex).toBe(1);
   });
 
   it("builds file completion items for import suggestions", () => {

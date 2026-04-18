@@ -8,6 +8,7 @@ import {
   Hover,
   Location,
   Position,
+  SignatureHelp,
   SymbolInformation,
   SymbolKind,
   TextEdit,
@@ -64,6 +65,11 @@ export type MemberAccessContext = {
     start: Position;
     end: Position;
   };
+};
+
+export type CallContext = {
+  callee: string;
+  argumentIndex: number;
 };
 
 const arktsKeywords = [
@@ -625,6 +631,35 @@ export function buildClassMemberCompletionItems(
     }));
 }
 
+export function buildSignatureHelp(
+  documents: TextDocument[],
+  document: TextDocument,
+  position: Position,
+  resolveImportTarget: (documentUri: string, specifier: string) => TextDocument | null,
+): SignatureHelp | null {
+  const context = getCallContextAtPosition(document, position);
+  if (!context) {
+    return null;
+  }
+
+  const signature = resolveCallableSignature(documents, document, context.callee, resolveImportTarget);
+  if (!signature) {
+    return null;
+  }
+
+  return {
+    signatures: [
+      {
+        label: signature.label,
+        documentation: signature.documentation,
+        parameters: signature.parameters.map((parameter) => ({ label: parameter })),
+      },
+    ],
+    activeSignature: 0,
+    activeParameter: Math.min(context.argumentIndex, Math.max(signature.parameters.length - 1, 0)),
+  };
+}
+
 export function getWordAtPosition(document: TextDocument, position: Position): string | null {
   const lineRange = {
     start: { line: position.line, character: 0 },
@@ -746,6 +781,52 @@ export function getMemberAccessContextAtPosition(document: TextDocument, positio
       start: { line: position.line, character: receiverStart },
       end: { line: position.line, character: safeCharacter },
     },
+  };
+}
+
+export function getCallContextAtPosition(document: TextDocument, position: Position): CallContext | null {
+  const line = document.getText({
+    start: { line: position.line, character: 0 },
+    end: { line: position.line + 1, character: 0 },
+  });
+  const safeCharacter = Math.min(position.character, line.length);
+  const beforeCursor = line.slice(0, safeCharacter);
+
+  let argumentIndex = 0;
+  let depth = 0;
+  let openParenIndex = -1;
+
+  for (let index = beforeCursor.length - 1; index >= 0; index -= 1) {
+    const char = beforeCursor[index];
+    if (char === ")") {
+      depth += 1;
+      continue;
+    }
+    if (char === "(") {
+      if (depth === 0) {
+        openParenIndex = index;
+        break;
+      }
+      depth -= 1;
+      continue;
+    }
+    if (char === "," && depth === 0) {
+      argumentIndex += 1;
+    }
+  }
+
+  if (openParenIndex < 0) {
+    return null;
+  }
+
+  const calleeMatch = beforeCursor.slice(0, openParenIndex).match(/([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*$/u);
+  if (!calleeMatch) {
+    return null;
+  }
+
+  return {
+    callee: calleeMatch[1],
+    argumentIndex,
   };
 }
 
@@ -938,6 +1019,144 @@ function collectClassMembers(
   }
 
   return dedupeMembers(members);
+}
+
+function collectClassMethodSignatures(
+  document: TextDocument,
+  className: string,
+): Array<{ name: string; parameters: string[]; label: string; documentation?: string }> {
+  const lines = document.getText().split(/\r?\n/u);
+  const classIndex = lines.findIndex((line) =>
+    new RegExp(`^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+${escapeRegExp(className)}\\b`, "u").test(line.trim()),
+  );
+  if (classIndex < 0) {
+    return [];
+  }
+
+  const signatures: Array<{ name: string; parameters: string[]; label: string; documentation?: string }> = [];
+  let braceDepth = 0;
+  let inClassBody = false;
+
+  for (let lineIndex = classIndex; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    for (const char of line) {
+      if (char === "{") {
+        braceDepth += 1;
+        inClassBody = true;
+      } else if (char === "}") {
+        braceDepth -= 1;
+        if (inClassBody && braceDepth <= 0) {
+          return signatures;
+        }
+      }
+    }
+
+    if (!inClassBody) {
+      continue;
+    }
+
+    const methodMatch = line.match(
+      /^\s*(?:public\s+|private\s+|protected\s+)?static\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?::\s*([^ {]+))?/u,
+    );
+    if (!methodMatch) {
+      continue;
+    }
+
+    const methodName = methodMatch[1];
+    const parameters = parseParameterList(methodMatch[2]);
+    const returnType = methodMatch[3];
+    signatures.push({
+      name: methodName,
+      parameters,
+      label: `${className}.${methodName}(${parameters.join(", ")})${returnType ? `: ${returnType}` : ""}`,
+    });
+  }
+
+  return signatures;
+}
+
+function collectTopLevelFunctionSignatures(
+  document: TextDocument,
+): Array<{ name: string; parameters: string[]; label: string; documentation?: string }> {
+  const lines = document.getText().split(/\r?\n/u);
+  const signatures: Array<{ name: string; parameters: string[]; label: string; documentation?: string }> = [];
+
+  for (const line of lines) {
+    const match = line.match(
+      /^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?::\s*([^ {]+))?/u,
+    );
+    if (!match) {
+      continue;
+    }
+
+    const name = match[1];
+    const parameters = parseParameterList(match[2]);
+    const returnType = match[3];
+    signatures.push({
+      name,
+      parameters,
+      label: `${name}(${parameters.join(", ")})${returnType ? `: ${returnType}` : ""}`,
+    });
+  }
+
+  return signatures;
+}
+
+function parseParameterList(source: string): string[] {
+  return source
+    .split(",")
+    .map((parameter) => parameter.trim())
+    .filter(Boolean);
+}
+
+function resolveCallableSignature(
+  documents: TextDocument[],
+  document: TextDocument,
+  callee: string,
+  resolveImportTarget: (documentUri: string, specifier: string) => TextDocument | null,
+): { label: string; parameters: string[]; documentation?: string } | null {
+  if (callee.includes(".")) {
+    const [receiver, memberName] = callee.split(".", 2);
+    const importBinding = collectImportBindings(document).find((binding) => binding.localName === receiver);
+    if (importBinding) {
+      const targetDocument = resolveImportTarget(document.uri, importBinding.specifier);
+      const methodSignature = targetDocument
+        ? collectClassMethodSignatures(targetDocument, importBinding.importedName).find((signature) => signature.name === memberName)
+        : null;
+      if (methodSignature) {
+        return methodSignature;
+      }
+    }
+
+    const localMethodSignature = collectClassMethodSignatures(document, receiver).find((signature) => signature.name === memberName);
+    if (localMethodSignature) {
+      return localMethodSignature;
+    }
+    return null;
+  }
+
+  const importBinding = collectImportBindings(document).find((binding) => binding.localName === callee);
+  if (importBinding) {
+    const targetDocument = resolveImportTarget(document.uri, importBinding.specifier);
+    const importedFunctionSignature = targetDocument
+      ? collectTopLevelFunctionSignatures(targetDocument).find((signature) => signature.name === importBinding.importedName)
+      : null;
+    if (importedFunctionSignature) {
+      return {
+        ...importedFunctionSignature,
+        label:
+          importBinding.localName === importBinding.importedName
+            ? importedFunctionSignature.label
+            : importedFunctionSignature.label.replace(importBinding.importedName, importBinding.localName),
+      };
+    }
+  }
+
+  return (
+    collectTopLevelFunctionSignatures(document).find((signature) => signature.name === callee) ??
+    documents.flatMap((candidate) => collectTopLevelFunctionSignatures(candidate)).find((signature) => signature.name === callee) ??
+    null
+  );
 }
 
 function createSymbol(

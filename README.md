@@ -31,6 +31,7 @@
 - import/export 感知的 definition、references、rename
 - 基于 ArkTS 关键字、工作区符号和命名 import 导出的轻量补全
 - imported class 的静态成员补全
+- imported function / class method 的签名提示
 - 相对 import 路径的模块解析与路径补全
 - 当前文档中的标识符高亮
 - ArkTS/HarmonyOS 项目根识别
