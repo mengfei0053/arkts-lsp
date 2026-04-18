@@ -26,4 +26,4 @@ This file applies to everything under `src/`.
 
 - `index.ts`: LSP connection setup and request/notification registration
 - `core.ts`: diagnostics, symbols, hover formatting, word lookup, definition helpers, reference/highlight lookup, rename edit construction, and completion helpers
-- `project.ts`: ArkTS/HarmonyOS project root detection, source file discovery, and project document loading
+- `project.ts`: ArkTS/HarmonyOS project root detection, source file discovery, project document loading, and relative module resolution

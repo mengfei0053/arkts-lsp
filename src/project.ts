@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { extname, dirname, join, resolve } from "node:path";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
@@ -11,6 +11,7 @@ const projectRootMarkers = [
 ];
 
 const ignoredDirectories = new Set([".git", "node_modules", "dist", "build", ".hvigor"]);
+const resolvableExtensions = [".ets", ".ts", ".d.ts"];
 
 export type ProjectContext = {
   root: string | null;
@@ -112,6 +113,68 @@ export function loadDocumentFromUri(uri: string, openDocuments: TextDocument[]):
   return TextDocument.create(uri, languageIdForPath(filePath), 0, readFileSync(filePath, "utf8"));
 }
 
+export function resolveRelativeModule(
+  fromUri: string,
+  specifier: string,
+  documents: TextDocument[],
+): TextDocument | null {
+  if (!fromUri.startsWith("file://") || !specifier.startsWith(".")) {
+    return null;
+  }
+
+  const sourcePath = fileURLToPath(fromUri);
+  const sourceDirectory = dirname(sourcePath);
+  const candidateBase = resolve(sourceDirectory, specifier);
+  const documentMap = new Map(documents.map((document) => [document.uri, document]));
+
+  for (const filePath of buildModuleCandidates(candidateBase)) {
+    const uri = pathToFileURL(filePath).toString();
+    const openDocument = documentMap.get(uri);
+    if (openDocument) {
+      return openDocument;
+    }
+    if (existsSync(filePath) && isArkTSSourceFile(filePath)) {
+      return TextDocument.create(uri, languageIdForPath(filePath), 0, readFileSync(filePath, "utf8"));
+    }
+  }
+
+  return null;
+}
+
+export function listRelativeModuleSpecifiers(
+  fromUri: string,
+  prefix: string,
+  documents: TextDocument[],
+): string[] {
+  if (!fromUri.startsWith("file://")) {
+    return [];
+  }
+
+  const sourcePath = fileURLToPath(fromUri);
+  const sourceDirectory = dirname(sourcePath);
+  const currentPrefix = prefix || ".";
+  const normalizedPrefix = currentPrefix.replace(/\\/gu, "/");
+
+  const specifiers = new Set<string>();
+
+  for (const document of documents) {
+    if (!document.uri.startsWith("file://") || document.uri === fromUri) {
+      continue;
+    }
+
+    const targetPath = fileURLToPath(document.uri);
+    const relativePath = relative(sourceDirectory, targetPath).split(sep).join("/");
+    const withoutExtension = stripModuleExtension(relativePath);
+    const candidate = withoutExtension.startsWith(".") ? withoutExtension : `./${withoutExtension}`;
+
+    if (candidate.startsWith(normalizedPrefix)) {
+      specifiers.add(candidate);
+    }
+  }
+
+  return [...specifiers].sort();
+}
+
 function walkDirectory(current: string, results: string[]): void {
   for (const entry of readdirSync(current, { withFileTypes: true })) {
     const fullPath = join(current, entry.name);
@@ -135,4 +198,29 @@ function walkDirectory(current: string, results: string[]): void {
 
 function languageIdForPath(filePath: string): string {
   return extname(filePath).toLowerCase() === ".ets" ? "arkts" : "typescript";
+}
+
+function buildModuleCandidates(candidateBase: string): string[] {
+  const candidates = new Set<string>();
+
+  if (extname(candidateBase)) {
+    candidates.add(candidateBase);
+  }
+
+  for (const extension of resolvableExtensions) {
+    candidates.add(`${candidateBase}${extension}`);
+    candidates.add(join(candidateBase, `index${extension}`));
+  }
+
+  return [...candidates];
+}
+
+function stripModuleExtension(filePath: string): string {
+  for (const extension of resolvableExtensions) {
+    if (filePath.endsWith(extension)) {
+      return filePath.slice(0, -extension.length);
+    }
+  }
+
+  return filePath;
 }

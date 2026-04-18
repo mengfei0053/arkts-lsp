@@ -26,10 +26,13 @@ The repository is currently focused on a clean, iterative MVP:
 - basic definition lookup by symbol name
 - exact-word reference lookup across open documents
 - lightweight completion from ArkTS keywords and indexed workspace symbols
+- relative import path resolution and path completion
 - exact-word document highlights in the current file
 - workspace rename edits for exact-word matches in open documents
 - ArkTS/HarmonyOS project root detection
 - `.ets` / `.ts` file scanning and project-level document loading
+- definition jumps on relative import specifiers
+- relative import path completion candidates
 - `opencode` integration scripts and config examples
 
 ## Status

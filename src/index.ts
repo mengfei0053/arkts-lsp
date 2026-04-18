@@ -14,6 +14,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocuments } from "vscode-languageserver";
 import {
+  buildImportCompletionItems,
   buildCompletionItems,
   buildHover,
   buildRenameEdit,
@@ -24,9 +25,16 @@ import {
   findDocumentHighlights,
   findReferences,
   findReferencesWithOptions,
+  getImportContextAtPosition,
   ServerSettings,
 } from "./core.js";
-import { buildProjectContext, collectWorkspaceProjectContexts, loadDocumentFromUri } from "./project.js";
+import {
+  buildProjectContext,
+  collectWorkspaceProjectContexts,
+  listRelativeModuleSpecifiers,
+  loadDocumentFromUri,
+  resolveRelativeModule,
+} from "./project.js";
 
 const defaultSettings: ServerSettings = { maxNumberOfProblems: 100 };
 const globalSettings: ServerSettings = defaultSettings;
@@ -107,6 +115,22 @@ connection.onDefinition(({ textDocument, position }) => {
   }
 
   const project = buildProjectContext(textDocument.uri, documents.all());
+  const importContext = getImportContextAtPosition(document, position);
+  if (importContext) {
+    const target = resolveRelativeModule(textDocument.uri, importContext.specifier, project.documents);
+    if (target) {
+      return [
+        {
+          uri: target.uri,
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 0 },
+          },
+        },
+      ];
+    }
+  }
+
   return findDefinitions({
     document,
     symbols: project.documents.flatMap((candidate) => collectDocumentSymbols(candidate)),
@@ -142,7 +166,13 @@ connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
     return [];
   }
 
-  return buildCompletionItems(buildProjectContext(textDocument.uri, documents.all()).documents, document, position);
+  const project = buildProjectContext(textDocument.uri, documents.all());
+  const importContext = getImportContextAtPosition(document, position);
+  if (importContext) {
+    return buildImportCompletionItems(listRelativeModuleSpecifiers(textDocument.uri, importContext.specifier, project.documents));
+  }
+
+  return buildCompletionItems(project.documents, document, position);
 });
 
 connection.onRenameRequest(({ textDocument, position, newName }): WorkspaceEdit | null => {

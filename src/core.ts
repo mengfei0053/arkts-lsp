@@ -25,6 +25,14 @@ type DefinitionContext = {
   symbols: SymbolInformation[];
 };
 
+export type ImportContext = {
+  specifier: string;
+  range: {
+    start: Position;
+    end: Position;
+  };
+};
+
 const arktsKeywords = [
   "import",
   "export",
@@ -308,6 +316,15 @@ export function buildCompletionItems(documents: TextDocument[], document: TextDo
   return items.slice(0, 100);
 }
 
+export function buildImportCompletionItems(specifiers: string[]): CompletionItem[] {
+  return specifiers.map((specifier) => ({
+    label: specifier,
+    kind: CompletionItemKind.File,
+    detail: "ArkTS module path",
+    insertText: specifier,
+  }));
+}
+
 export function getWordAtPosition(document: TextDocument, position: Position): string | null {
   const lineRange = {
     start: { line: position.line, character: 0 },
@@ -332,6 +349,44 @@ export function getWordAtPosition(document: TextDocument, position: Position): s
   }
 
   return line.slice(start, end);
+}
+
+export function getImportContextAtPosition(document: TextDocument, position: Position): ImportContext | null {
+  const lines = document.getText().split(/\r?\n/u);
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const importMatch = line.match(/^\s*import\s+.*?from\s+["']([^"']*)["']/u) ?? line.match(/^\s*import\s+["']([^"']*)["']/u);
+    if (!importMatch || importMatch.index === undefined) {
+      continue;
+    }
+
+    const specifier = importMatch[1];
+    const quotedSpecifier = importMatch[0];
+    const relativeStart = quotedSpecifier.lastIndexOf(specifier);
+    if (relativeStart < 0) {
+      continue;
+    }
+
+    const absoluteStart = importMatch.index + relativeStart;
+    const absoluteEnd = absoluteStart + specifier.length;
+    if (position.line !== lineIndex) {
+      continue;
+    }
+    if (position.character < absoluteStart || position.character > absoluteEnd) {
+      continue;
+    }
+
+    return {
+      specifier,
+      range: {
+        start: { line: lineIndex, character: absoluteStart },
+        end: { line: lineIndex, character: absoluteEnd },
+      },
+    };
+  }
+
+  return null;
 }
 
 function collectWordLocations(document: TextDocument, word: string): Location[] {

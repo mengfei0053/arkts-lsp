@@ -30,10 +30,13 @@
 - 基于符号名的基础定义跳转
 - 基于精确标识符匹配的引用查询
 - 基于 ArkTS 关键字和工作区符号的轻量补全
+- 相对 import 路径的模块解析与路径补全
 - 当前文档中的标识符高亮
 - 基于精确标识符匹配生成 `WorkspaceEdit` 的重命名
 - ArkTS/HarmonyOS 项目根识别
 - `.ets` / `.ts` 文件扫描与项目级文档加载
+- 相对 import 路径 definition 跳转
+- 相对 import 路径 completion 候选
 - 面向 `opencode` 的接入脚本和配置示例
 
 ## 当前状态

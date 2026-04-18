@@ -11,7 +11,9 @@ import {
   detectArkTSProjectRoot,
   isArkTSSourceFile,
   listProjectSourceFiles,
+  listRelativeModuleSpecifiers,
   loadDocumentFromUri,
+  resolveRelativeModule,
 } from "../src/project.js";
 
 const tempDirectories: string[] = [];
@@ -85,6 +87,40 @@ describe("project detection", () => {
 
     expect(document).not.toBeNull();
     expect(document?.getText()).toContain("HomePage");
+  });
+
+  it("resolves a relative module to a project document", () => {
+    const project = createProject({
+      "AppScope/app.json5": "{}",
+      "hvigorfile.ts": "export default {};",
+      "entry/src/main/ets/pages/Home.ets": "import { helper } from '../util/helper';",
+      "entry/src/main/ets/util/helper.ts": "export function helper() {}",
+    });
+
+    const homeUri = pathToFileURL(join(project, "entry/src/main/ets/pages/Home.ets")).toString();
+    const helperUri = pathToFileURL(join(project, "entry/src/main/ets/util/helper.ts")).toString();
+    const context = buildProjectContext(homeUri, []);
+
+    const target = resolveRelativeModule(homeUri, "../util/helper", context.documents);
+
+    expect(target?.uri).toBe(helperUri);
+  });
+
+  it("lists relative module specifiers for import completion", () => {
+    const project = createProject({
+      "AppScope/app.json5": "{}",
+      "hvigorfile.ts": "export default {};",
+      "entry/src/main/ets/pages/Home.ets": "import { helper } from '../util/helper';",
+      "entry/src/main/ets/pages/Profile.ets": "struct ProfilePage {}",
+      "entry/src/main/ets/util/helper.ts": "export function helper() {}",
+    });
+
+    const homeUri = pathToFileURL(join(project, "entry/src/main/ets/pages/Home.ets")).toString();
+    const context = buildProjectContext(homeUri, []);
+
+    const specifiers = listRelativeModuleSpecifiers(homeUri, "../", context.documents);
+
+    expect(specifiers).toContain("../util/helper");
   });
 });
 

@@ -3,6 +3,7 @@ import { CompletionItemKind, Position, SymbolKind } from "vscode-languageserver/
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   buildCompletionItems,
+  buildImportCompletionItems,
   buildHover,
   buildRenameEdit,
   collectDiagnostics,
@@ -12,6 +13,7 @@ import {
   findDocumentHighlights,
   findReferences,
   findReferencesWithOptions,
+  getImportContextAtPosition,
   getWordAtPosition,
 } from "../src/core.js";
 
@@ -204,5 +206,21 @@ describe("buildCompletionItems", () => {
 
     expect(items.some((item) => item.label === "@Entry")).toBe(true);
     expect(items.some((item) => item.label === "@Component")).toBe(true);
+  });
+});
+
+describe("import helpers", () => {
+  it("detects when the cursor is inside an import specifier", () => {
+    const document = makeDocument("file:///entry.ets", 'import { Encode } from "./Encode";');
+
+    const context = getImportContextAtPosition(document, Position.create(0, 27));
+
+    expect(context?.specifier).toBe("./Encode");
+  });
+
+  it("builds file completion items for import suggestions", () => {
+    const items = buildImportCompletionItems(["./Encode", "../util/helper"]);
+
+    expect(items.map((item) => item.label)).toEqual(["./Encode", "../util/helper"]);
   });
 });
