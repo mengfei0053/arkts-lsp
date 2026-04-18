@@ -11,6 +11,7 @@ import {
   findDefinitions,
   findDocumentHighlights,
   findReferences,
+  findReferencesWithOptions,
   getWordAtPosition,
 } from "../src/core.js";
 
@@ -131,6 +132,19 @@ describe("workspace navigation helpers", () => {
       "file:///first.ets",
       "file:///second.ets",
     ]);
+  });
+
+  it("can exclude declarations from reference results", () => {
+    const first = makeDocument(
+      "file:///first.ets",
+      ["export function loadProfile() {}", "const value = loadProfile();"].join("\n"),
+    );
+    const second = makeDocument("file:///second.ets", "loadProfile();");
+
+    const references = findReferencesWithOptions([first, second], first, Position.create(1, 20), false);
+
+    expect(references).toHaveLength(2);
+    expect(references.every((location) => !(location.uri === "file:///first.ets" && location.range.start.line === 0))).toBe(true);
   });
 
   it("finds highlights within the current document", () => {

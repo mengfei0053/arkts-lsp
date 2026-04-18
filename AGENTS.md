@@ -34,3 +34,5 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 
 - `src/`: language server runtime and reusable analysis helpers
 - `test/`: unit and integration coverage for server behavior
+- `scripts/`: local wrapper scripts used for editor and tool integration
+- `examples/`: sample configuration files for external integrations such as opencode

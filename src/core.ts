@@ -204,12 +204,33 @@ export function findDefinitions({ document, symbols }: DefinitionContext, positi
 }
 
 export function findReferences(documents: TextDocument[], document: TextDocument, position: Position): Location[] {
+  return findReferencesWithOptions(documents, document, position, true);
+}
+
+export function findReferencesWithOptions(
+  documents: TextDocument[],
+  document: TextDocument,
+  position: Position,
+  includeDeclaration: boolean,
+): Location[] {
   const word = getWordAtPosition(document, position);
   if (!word) {
     return [];
   }
 
-  return documents.flatMap((candidate) => collectWordLocations(candidate, word));
+  const references = documents.flatMap((candidate) => collectWordLocations(candidate, word));
+  if (includeDeclaration) {
+    return references;
+  }
+
+  const declarationKeys = new Set(
+    documents
+      .flatMap((candidate) => collectDocumentSymbols(candidate))
+      .filter((symbol) => symbol.name === word)
+      .map((symbol) => locationKey(symbol.location)),
+  );
+
+  return references.filter((location) => !declarationKeys.has(locationKey(location)));
 }
 
 export function findDocumentHighlights(document: TextDocument, position: Position): DocumentHighlight[] {
@@ -323,6 +344,9 @@ function collectWordLocations(document: TextDocument, word: string): Location[] 
     const line = lines[lineIndex];
     for (const match of line.matchAll(pattern)) {
       const startCharacter = match.index ?? 0;
+      if (isInsideQuotedString(line, startCharacter)) {
+        continue;
+      }
       locations.push({
         uri: document.uri,
         range: {
@@ -393,6 +417,31 @@ function mapSymbolKindToCompletionKind(symbolKind: SymbolKind): CompletionItemKi
     default:
       return CompletionItemKind.Text;
   }
+}
+
+function isInsideQuotedString(line: string, index: number): boolean {
+  const before = line.slice(0, index);
+  return (
+    countUnescaped(before, "'") % 2 === 1 ||
+    countUnescaped(before, '"') % 2 === 1 ||
+    countUnescaped(before, "`") % 2 === 1
+  );
+}
+
+function countUnescaped(text: string, quote: string): number {
+  let count = 0;
+
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === quote && text[index - 1] !== "\\") {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function locationKey(location: Location): string {
+  return `${location.uri}:${location.range.start.line}:${location.range.start.character}:${location.range.end.line}:${location.range.end.character}`;
 }
 
 function escapeRegExp(value: string): string {

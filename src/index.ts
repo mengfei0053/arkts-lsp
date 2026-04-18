@@ -23,8 +23,10 @@ import {
   findDefinitions,
   findDocumentHighlights,
   findReferences,
+  findReferencesWithOptions,
   ServerSettings,
 } from "./core.js";
+import { buildProjectContext, collectWorkspaceProjectContexts, loadDocumentFromUri } from "./project.js";
 
 const defaultSettings: ServerSettings = { maxNumberOfProblems: 100 };
 const globalSettings: ServerSettings = defaultSettings;
@@ -77,7 +79,7 @@ documents.onDidChangeContent((change) => {
 });
 
 connection.onHover(({ textDocument, position }): Hover | null => {
-  const document = documents.get(textDocument.uri);
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
   if (!document) {
     return null;
   }
@@ -86,7 +88,7 @@ connection.onHover(({ textDocument, position }): Hover | null => {
 });
 
 connection.onDocumentSymbol(({ textDocument }) => {
-  const document = documents.get(textDocument.uri);
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
   if (!document) {
     return [];
   }
@@ -95,32 +97,38 @@ connection.onDocumentSymbol(({ textDocument }) => {
 });
 
 connection.onWorkspaceSymbol(({ query }) => {
-  return collectWorkspaceSymbols(documents.all(), query);
+  return collectWorkspaceProjectContexts(documents.all()).flatMap((context) => collectWorkspaceSymbols(context.documents, query));
 });
 
 connection.onDefinition(({ textDocument, position }) => {
-  const document = documents.get(textDocument.uri);
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
   if (!document) {
     return [];
   }
 
+  const project = buildProjectContext(textDocument.uri, documents.all());
   return findDefinitions({
     document,
-    symbols: documents.all().flatMap((candidate) => collectDocumentSymbols(candidate)),
+    symbols: project.documents.flatMap((candidate) => collectDocumentSymbols(candidate)),
   }, position);
 });
 
-connection.onReferences(({ textDocument, position }): Location[] => {
-  const document = documents.get(textDocument.uri);
+connection.onReferences(({ textDocument, position, context }): Location[] => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
   if (!document) {
     return [];
   }
 
-  return findReferences(documents.all(), document, position);
+  return findReferencesWithOptions(
+    buildProjectContext(textDocument.uri, documents.all()).documents,
+    document,
+    position,
+    context.includeDeclaration ?? true,
+  );
 });
 
 connection.onDocumentHighlight(({ textDocument, position }): DocumentHighlight[] => {
-  const document = documents.get(textDocument.uri);
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
   if (!document) {
     return [];
   }
@@ -129,21 +137,21 @@ connection.onDocumentHighlight(({ textDocument, position }): DocumentHighlight[]
 });
 
 connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
-  const document = documents.get(textDocument.uri);
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
   if (!document) {
     return [];
   }
 
-  return buildCompletionItems(documents.all(), document, position);
+  return buildCompletionItems(buildProjectContext(textDocument.uri, documents.all()).documents, document, position);
 });
 
 connection.onRenameRequest(({ textDocument, position, newName }): WorkspaceEdit | null => {
-  const document = documents.get(textDocument.uri);
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
   if (!document) {
     return null;
   }
 
-  return buildRenameEdit(documents.all(), document, position, newName);
+  return buildRenameEdit(buildProjectContext(textDocument.uri, documents.all()).documents, document, position, newName);
 });
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {

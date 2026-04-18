@@ -109,6 +109,62 @@ npm run dev -- --stdio
 5. 增加更贴近真实工程的 fixture 和集成测试
 6. 准备 `opencode` 接入配置和端到端验证
 
+### opencode 接入
+
+根据 OpenCode 官方文档，LSP 可以通过 `opencode.json` 里的 `lsp` 字段自定义配置。文档说明：
+
+- 全局配置文件路径：`~/.config/opencode/opencode.json`
+- 项目配置文件路径：项目根目录下的 `opencode.json`
+- 自定义 LSP 需要提供 `command` 和 `extensions`
+
+仓库里已经提供了两个示例配置：
+
+- [examples/opencode.global.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.global.json:1)
+- [examples/opencode.project.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.project.json:1)
+
+并提供了一个稳定启动脚本：
+
+- [scripts/opencode-arkts-lsp](/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp:1)
+
+推荐的接入方式：
+
+1. 全局先启用 `.ets` 支持，避免影响普通 TypeScript 项目
+2. 在真正的 ArkTS/HarmonyOS 项目根目录下放置项目级 `opencode.json`
+3. 如果该项目里的 `.ts` 文件也希望由 `arkts-lsp` 接管，就在项目级配置中关闭 `typescript` 并把 `.ts` 加到 `extensions`
+
+一个最小可用的全局配置示例：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "arkts-lsp": {
+      "command": ["/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp"],
+      "extensions": [".ets"]
+    }
+  }
+}
+```
+
+如果是 ArkTS 项目级配置，推荐：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "typescript": {
+      "disabled": true
+    },
+    "arkts-lsp": {
+      "command": ["/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp"],
+      "extensions": [".ets", ".ts"]
+    }
+  }
+}
+```
+
+这样做的目的，是让 `opencode` 在写 ArkTS 页面、组件和同项目辅助 `.ts` 文件时，都优先走 `arkts-lsp`。
+
 ---
 
 ## English
@@ -208,3 +264,24 @@ The next major milestones are:
 4. upgrading definition / references / rename from text matching to project-aware behavior
 5. adding fixture-based and integration-style tests
 6. preparing `opencode` integration and end-to-end validation
+
+### opencode Integration
+
+OpenCode officially supports custom LSP servers through the `lsp` section in `opencode.json`.
+
+Useful paths:
+
+- global config: `~/.config/opencode/opencode.json`
+- project config: `opencode.json` in the project root
+
+This repository now includes:
+
+- [examples/opencode.global.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.global.json:1)
+- [examples/opencode.project.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.project.json:1)
+- [scripts/opencode-arkts-lsp](/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp:1)
+
+Recommended rollout:
+
+1. Enable `.ets` globally first
+2. Add project-level config in real ArkTS/HarmonyOS workspaces
+3. Disable the built-in TypeScript LSP per ArkTS project if you want `.ts` files handled by `arkts-lsp`

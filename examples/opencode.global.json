@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "arkts-lsp": {
+      "command": [
+        "/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp"
+      ],
+      "extensions": [
+        ".ets"
+      ],
+      "initialization": {
+        "projectMarkers": [
+          "AppScope/app.json5",
+          "hvigorfile.ts",
+          "build-profile.json5",
+          "oh-package.json5"
+        ]
+      }
+    }
+  }
+}

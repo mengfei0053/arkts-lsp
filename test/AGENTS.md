@@ -13,6 +13,7 @@ This file applies to everything under `test/`.
 ## Test Strategy
 
 - Start with unit tests for pure helpers in `src/core.ts`.
+- Use filesystem-backed temp projects when project detection or indexing cannot be validated with in-memory documents alone.
 - Add integration-style tests only when behavior cannot be verified through pure functions.
 - Use small in-memory `TextDocument` fixtures before introducing filesystem fixtures.
 - Keep assertions behavior-focused instead of implementation-fragile.
