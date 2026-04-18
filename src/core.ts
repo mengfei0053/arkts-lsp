@@ -25,6 +25,16 @@ type DefinitionContext = {
   symbols: SymbolInformation[];
 };
 
+export type ImportBinding = {
+  importedName: string;
+  localName: string;
+  specifier: string;
+  range: {
+    start: Position;
+    end: Position;
+  };
+};
+
 export type ImportContext = {
   specifier: string;
   range: {
@@ -195,6 +205,110 @@ export function collectWorkspaceSymbols(documents: TextDocument[], query: string
     location: symbol.location,
     containerName: symbol.containerName,
   }));
+}
+
+export function collectImportBindings(document: TextDocument): ImportBinding[] {
+  const bindings: ImportBinding[] = [];
+  const lines = document.getText().split(/\r?\n/u);
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const match = line.match(/^\s*import\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/u);
+    if (!match || match.index === undefined) {
+      continue;
+    }
+
+    const specifier = match[2];
+    const clause = match[1];
+    const clauseOffset = line.indexOf(clause);
+    if (clauseOffset < 0) {
+      continue;
+    }
+
+    for (const entry of clause.split(",")) {
+      const rawPart = entry.trim();
+      if (!rawPart) {
+        continue;
+      }
+
+      const aliasMatch = rawPart.match(/^([A-Za-z_]\w*)\s+as\s+([A-Za-z_]\w*)$/u);
+      const importedName = aliasMatch ? aliasMatch[1] : rawPart;
+      const localName = aliasMatch ? aliasMatch[2] : rawPart;
+      const localNameOffset = line.indexOf(localName, clauseOffset);
+      if (localNameOffset < 0) {
+        continue;
+      }
+
+      bindings.push({
+        importedName,
+        localName,
+        specifier,
+        range: {
+          start: { line: lineIndex, character: localNameOffset },
+          end: { line: lineIndex, character: localNameOffset + localName.length },
+        },
+      });
+    }
+  }
+
+  return bindings;
+}
+
+export function getImportBindingAtPosition(document: TextDocument, position: Position): ImportBinding | null {
+  const word = getWordAtPosition(document, position);
+  if (!word) {
+    return null;
+  }
+
+  const sameLineBinding = collectImportBindings(document).find((binding) => {
+    return (
+      binding.localName === word &&
+      binding.range.start.line === position.line &&
+      position.character >= binding.range.start.character &&
+      position.character <= binding.range.end.character
+    );
+  });
+
+  if (sameLineBinding) {
+    return sameLineBinding;
+  }
+
+  return collectImportBindings(document).find((binding) => binding.localName === word) ?? null;
+}
+
+export function collectExportedSymbolLocations(document: TextDocument): Map<string, Location[]> {
+  const lines = document.getText().split(/\r?\n/u);
+  const exportedNames = new Set<string>();
+  const patterns = [
+    /^(?:\s*)export\s+(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_]\w*)/u,
+    /^(?:\s*)export\s+(?:abstract\s+)?class\s+([A-Za-z_]\w*)/u,
+    /^(?:\s*)export\s+interface\s+([A-Za-z_]\w*)/u,
+    /^(?:\s*)export\s+enum\s+([A-Za-z_]\w*)/u,
+    /^(?:\s*)export\s+type\s+([A-Za-z_]\w*)/u,
+    /^(?:\s*)export\s+(?:const|let|var)\s+([A-Za-z_]\w*)/u,
+  ];
+
+  for (const line of lines) {
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (match) {
+        exportedNames.add(match[1]);
+      }
+    }
+  }
+
+  const result = new Map<string, Location[]>();
+  for (const symbol of collectDocumentSymbols(document)) {
+    if (!exportedNames.has(symbol.name)) {
+      continue;
+    }
+
+    const current = result.get(symbol.name) ?? [];
+    current.push(symbol.location);
+    result.set(symbol.name, current);
+  }
+
+  return result;
 }
 
 export function findDefinitions({ document, symbols }: DefinitionContext, position: Position): Location[] {

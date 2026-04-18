@@ -3,8 +3,16 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { Position } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { collectDocumentSymbols, findDefinitions, findReferences, findReferencesWithOptions } from "../src/core.js";
+import {
+  collectDocumentSymbols,
+  collectExportedSymbolLocations,
+  findDefinitions,
+  findReferences,
+  findReferencesWithOptions,
+  getImportBindingAtPosition,
+} from "../src/core.js";
 import {
   buildProjectContext,
   collectWorkspaceProjectContexts,
@@ -146,6 +154,29 @@ describe("project-aware navigation", () => {
     );
 
     expect(definitions.some((location) => location.uri.endsWith("/helper.ts"))).toBe(true);
+  });
+
+  it("resolves imported symbol definitions from the target module exports", () => {
+    const project = createProject({
+      "AppScope/app.json5": "{}",
+      "hvigorfile.ts": "export default {};",
+      "entry/src/main/ets/pages/Home.ets": "import { helper as loadHelper } from '../util/helper';\nloadHelper();",
+      "entry/src/main/ets/util/helper.ts": "export function helper() {}\nexport const otherValue = 1;",
+    });
+
+    const homeUri = pathToFileURL(join(project, "entry/src/main/ets/pages/Home.ets")).toString();
+    const home = TextDocument.create(homeUri, "arkts", 1, "import { helper as loadHelper } from '../util/helper';\nloadHelper();");
+    const context = buildProjectContext(homeUri, [home]);
+
+    const binding = getImportBindingAtPosition(home, Position.create(0, 20));
+    const target = binding ? resolveRelativeModule(homeUri, binding.specifier, context.documents) : null;
+    const exports = target ? collectExportedSymbolLocations(target).get(binding?.importedName ?? "") ?? [] : [];
+
+    expect(binding?.importedName).toBe("helper");
+    expect(binding?.localName).toBe("loadHelper");
+    expect(target?.uri.endsWith("/helper.ts")).toBe(true);
+    expect(exports).toHaveLength(1);
+    expect(exports[0].uri.endsWith("/helper.ts")).toBe(true);
   });
 
   it("finds references across files in the same project context", () => {

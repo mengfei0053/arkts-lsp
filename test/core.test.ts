@@ -8,11 +8,14 @@ import {
   buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
+  collectExportedSymbolLocations,
+  collectImportBindings,
   collectWorkspaceSymbols,
   findDefinitions,
   findDocumentHighlights,
   findReferences,
   findReferencesWithOptions,
+  getImportBindingAtPosition,
   getImportContextAtPosition,
   getWordAtPosition,
 } from "../src/core.js";
@@ -210,6 +213,36 @@ describe("buildCompletionItems", () => {
 });
 
 describe("import helpers", () => {
+  it("collects named import bindings including aliases", () => {
+    const document = makeDocument("file:///entry.ets", 'import { helper, format as formatValue } from "./utils";');
+
+    const bindings = collectImportBindings(document);
+
+    expect(bindings).toHaveLength(2);
+    expect(bindings[0]).toMatchObject({
+      importedName: "helper",
+      localName: "helper",
+      specifier: "./utils",
+    });
+    expect(bindings[1]).toMatchObject({
+      importedName: "format",
+      localName: "formatValue",
+      specifier: "./utils",
+    });
+  });
+
+  it("finds the import binding under the cursor", () => {
+    const document = makeDocument("file:///entry.ets", 'import { format as formatValue } from "./utils";');
+
+    const binding = getImportBindingAtPosition(document, Position.create(0, 22));
+
+    expect(binding).toMatchObject({
+      importedName: "format",
+      localName: "formatValue",
+      specifier: "./utils",
+    });
+  });
+
   it("detects when the cursor is inside an import specifier", () => {
     const document = makeDocument("file:///entry.ets", 'import { Encode } from "./Encode";');
 
@@ -222,5 +255,18 @@ describe("import helpers", () => {
     const items = buildImportCompletionItems(["./Encode", "../util/helper"]);
 
     expect(items.map((item) => item.label)).toEqual(["./Encode", "../util/helper"]);
+  });
+
+  it("collects exported symbol locations by exported name", () => {
+    const document = makeDocument(
+      "file:///helper.ts",
+      ["export function helper() {}", "export class HelperService {}", "const hidden = true;"].join("\n"),
+    );
+
+    const exports = collectExportedSymbolLocations(document);
+
+    expect(exports.get("helper")).toHaveLength(1);
+    expect(exports.get("HelperService")).toHaveLength(1);
+    expect(exports.has("hidden")).toBe(false);
   });
 });

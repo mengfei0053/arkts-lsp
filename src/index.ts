@@ -20,11 +20,13 @@ import {
   buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
+  collectExportedSymbolLocations,
   collectWorkspaceSymbols,
   findDefinitions,
   findDocumentHighlights,
   findReferences,
   findReferencesWithOptions,
+  getImportBindingAtPosition,
   getImportContextAtPosition,
   ServerSettings,
 } from "./core.js";
@@ -128,6 +130,17 @@ connection.onDefinition(({ textDocument, position }) => {
           },
         },
       ];
+    }
+  }
+
+  const importBinding = getImportBindingAtPosition(document, position);
+  if (importBinding) {
+    const target = resolveRelativeModule(textDocument.uri, importBinding.specifier, project.documents);
+    if (target) {
+      const exportedSymbols = collectExportedSymbolLocations(target).get(importBinding.importedName);
+      if (exportedSymbols && exportedSymbols.length > 0) {
+        return exportedSymbols;
+      }
     }
   }
 
