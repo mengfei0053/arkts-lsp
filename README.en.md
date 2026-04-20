@@ -30,9 +30,14 @@ The repository is currently focused on a clean, iterative MVP:
 - more accurate `this.` instance-member completion inside ArkTS components
 - static member completion for imported classes
 - signature help for imported functions and class methods
+- lightweight parameter-name inlay hints for local functions and imported function aliases
+- lightweight quick-fix code actions for existing TODO and `any` diagnostics
+- lightweight semantic tokens for ArkTS/TypeScript source files covering keywords, types, functions, variables, decorators, and safe property names
 - relative import path resolution and path completion
 - document links for relative import specifiers
 - exact-word document highlights in the current file
+- lightweight folding ranges for multi-line brace blocks
+- lightweight selection ranges for identifiers, statements, and brace blocks
 - ArkTS/HarmonyOS project root detection
 - `.ets` / `.ts` file scanning and project-level document loading
 - definition jumps on relative import specifiers
@@ -85,7 +90,12 @@ Current tests cover the core behaviors that are easiest to regress while the ser
 - completion results
 - hover formatting
 - ArkTS component field semantics and `this.` member completion
+- inlay hint parameter labels
+- code action quick fixes
+- semantic tokens
 - document highlight
+- folding range
+- selection range
 - rename workspace edits
 - project root detection
 - project file scanning and project-context loading
@@ -102,7 +112,12 @@ In the target setup, `opencode` should be able to launch `arkts-lsp` automatical
 - `references`
 - `rename`
 - `completion`
+- `inlayHint`
+- `codeAction`
+- `semanticTokens`
 - `diagnostics`
+- `foldingRange`
+- `selectionRange`
 
 ## Roadmap
 

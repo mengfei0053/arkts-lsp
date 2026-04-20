@@ -2,6 +2,13 @@ import { SignatureHelp } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { collectImportBindings, escapeRegExp, getCallContextAtPosition } from "./text.js";
 
+export type CallableSignature = {
+  name: string;
+  parameters: string[];
+  label: string;
+  documentation?: string;
+};
+
 export function buildSignatureHelp(
   documents: TextDocument[],
   document: TextDocument,
@@ -31,12 +38,12 @@ export function buildSignatureHelp(
   };
 }
 
-function resolveCallableSignature(
+export function resolveCallableSignature(
   documents: TextDocument[],
   document: TextDocument,
   callee: string,
   resolveImportTarget: (documentUri: string, specifier: string) => TextDocument | null,
-): { label: string; parameters: string[]; documentation?: string } | null {
+): CallableSignature | null {
   if (callee.includes(".")) {
     const [receiver, memberName] = callee.split(".", 2);
     const importBinding = collectImportBindings(document).find((binding) => binding.localName === receiver);
@@ -80,7 +87,7 @@ function resolveCallableSignature(
 function collectClassMethodSignatures(
   document: TextDocument,
   className: string,
-): Array<{ name: string; parameters: string[]; label: string; documentation?: string }> {
+): CallableSignature[] {
   const lines = document.getText().split(/\r?\n/u);
   const classIndex = lines.findIndex((line) =>
     new RegExp(`^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+${escapeRegExp(className)}\\b`, "u").test(line.trim()),
@@ -89,7 +96,7 @@ function collectClassMethodSignatures(
     return [];
   }
 
-  const signatures: Array<{ name: string; parameters: string[]; label: string; documentation?: string }> = [];
+  const signatures: CallableSignature[] = [];
   let braceDepth = 0;
   let inClassBody = false;
 
@@ -131,7 +138,7 @@ function collectClassMethodSignatures(
 
 function collectTopLevelFunctionSignatures(
   document: TextDocument,
-): Array<{ name: string; parameters: string[]; label: string; documentation?: string }> {
+): CallableSignature[] {
   return document
     .getText()
     .split(/\r?\n/u)

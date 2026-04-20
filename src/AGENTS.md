@@ -14,6 +14,10 @@ This file applies to everything under `src/`.
 
 - `@State`, `@Prop`, and `@Link` field handling inside ArkTS components.
 - `this.` instance-member completion inside component bodies.
+- Lightweight structural selection support that stays text-based and predictable.
+- Lightweight inlay hints that reuse existing symbol/signature heuristics.
+- Lightweight code actions that reuse existing diagnostics and stay text-based.
+- Lightweight semantic tokens that stay text-based and reuse declaration/context heuristics.
 - Hover, definition, references, rename, and document-link flows that stay aligned with the symbol model.
 - Preserve import/export and linked-reference behavior while refining the heuristics incrementally.
 
@@ -43,5 +47,9 @@ This file applies to everything under `src/`.
 - `navigation.ts`: definition, references, document links, highlights, and rename flows
 - `completion.ts`: keyword, import, and class member completion helpers
 - `hover.ts`: base hover and import/export-aware hover
+- `inlay-hint.ts`: text-based inlay hint collection for lightweight parameter labels
+- `code-action.ts`: text-based quick fixes derived from existing diagnostics
+- `semantic-tokens.ts`: text-based semantic token collection and encoding
 - `signature.ts`: signature help parsing and resolution
 - `project.ts`: ArkTS/HarmonyOS project root detection, source file discovery, project document loading, and relative module resolution
+- `selection-range.ts`: text-based nested selection ranges for identifiers, statements, and brace blocks

@@ -10,6 +10,9 @@ This file applies to everything under `test/`.
 - Keep tests fast enough to run on every local iteration.
 - Prefer deterministic tests over environment-dependent checks.
 - Cover ArkTS semantic tweaks with focused regression tests when behavior changes.
+- Cover user-visible editor assistance such as `selectionRange` and `inlayHint` with focused regressions.
+- Cover user-visible editor assistance such as `selectionRange`, `inlayHint`, and `codeAction` with focused regressions.
+- Cover user-visible editor assistance such as `semanticTokens` with focused regressions.
 
 ## Test Strategy
 

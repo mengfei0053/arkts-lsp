@@ -1,16 +1,18 @@
 import {
+  CodeAction,
   CompletionItem,
   createConnection,
   DidChangeConfigurationNotification,
   DocumentHighlight,
   DocumentLink,
   Hover,
+  InlayHint,
   InitializeParams,
   InitializeResult,
   Location,
   ProposedFeatures,
+  SemanticTokens,
   SignatureHelp,
-  TextDocumentSyncKind,
   WorkspaceEdit,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -21,9 +23,13 @@ import {
   buildLinkedRenameEdit,
   buildLinkedHover,
   buildNamedImportCompletionItems,
+  buildInlayHints,
   buildSignatureHelp,
+  buildSelectionRangeResponse,
   buildCompletionItems,
+  buildCodeActions,
   buildRenameEdit,
+  buildSemanticTokens,
   collectDiagnostics,
   collectDocumentSymbols,
   collectRelativeImportDocumentLinks,
@@ -47,6 +53,7 @@ import {
   loadDocumentFromUri,
   resolveRelativeModule,
 } from "./project.js";
+import { buildServerCapabilities } from "./server-capabilities.js";
 
 const defaultSettings: ServerSettings = { maxNumberOfProblems: 100 };
 const globalSettings: ServerSettings = defaultSettings;
@@ -61,28 +68,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasConfigurationCapability = Boolean(capabilities.workspace?.configuration);
 
   return {
-    capabilities: {
-      textDocumentSync: TextDocumentSyncKind.Incremental,
-      hoverProvider: true,
-      definitionProvider: true,
-      referencesProvider: true,
-      documentHighlightProvider: true,
-      documentLinkProvider: {
-        resolveProvider: false,
-      },
-      renameProvider: {
-        prepareProvider: false,
-      },
-      documentSymbolProvider: true,
-      workspaceSymbolProvider: true,
-      completionProvider: {
-        resolveProvider: false,
-        triggerCharacters: [".", "@", ":"],
-      },
-      signatureHelpProvider: {
-        triggerCharacters: ["(", ","],
-      },
-    },
+    capabilities: buildServerCapabilities(),
   };
 });
 
@@ -209,6 +195,41 @@ connection.onDocumentLinks(({ textDocument }): DocumentLink[] => {
   return collectRelativeImportDocumentLinks(document, (specifier) =>
     resolveRelativeModule(textDocument.uri, specifier, project.documents),
   );
+});
+
+connection.onSelectionRanges(({ textDocument, positions }) => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  return buildSelectionRangeResponse(document, positions);
+});
+
+connection.languages.inlayHint.on(({ textDocument, range }): InlayHint[] => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  if (!document) {
+    return [];
+  }
+
+  const project = buildProjectContext(textDocument.uri, documents.all());
+  return buildInlayHints(project.documents, document, range, (documentUri, specifier) =>
+    resolveRelativeModule(documentUri, specifier, project.documents),
+  );
+});
+
+connection.languages.semanticTokens.on(({ textDocument }): SemanticTokens => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  if (!document) {
+    return { data: [] };
+  }
+
+  return buildSemanticTokens(document);
+});
+
+connection.onCodeAction(({ textDocument, context }): CodeAction[] => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  if (!document) {
+    return [];
+  }
+
+  return buildCodeActions(document, context.diagnostics);
 });
 
 connection.onCompletion(({ textDocument, position }): CompletionItem[] => {

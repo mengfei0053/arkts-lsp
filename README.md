@@ -34,9 +34,14 @@
 - ArkTS 组件内更准确的 `this.` 实例成员补全
 - imported class 的静态成员补全
 - imported function / class method 的签名提示
+- 面向本地函数与 imported function alias 的轻量参数名 inlay hint
+- 基于现有 `TODO` / `any` 诊断的轻量 quick fix code action
+- 面向 ArkTS/TypeScript 源文件的轻量 semantic tokens（关键字、类型、函数、变量、装饰器、属性）
 - 相对 import 路径的模块解析与路径补全
 - 相对 import 路径的 DocumentLink / 可点击链接
 - 当前文档中的标识符高亮
+- 基于多行花括号块的轻量 folding range
+- 基于标识符、语句和花括号块的轻量 selection range
 - ArkTS/HarmonyOS 项目根识别
 - `.ets` / `.ts` 文件扫描与项目级文档加载
 - 相对 import 路径 definition 跳转
@@ -89,7 +94,12 @@ npm run dev -- --stdio
 - completion 结果
 - hover 内容格式化
 - ArkTS 组件字段语义与 `this.` 成员补全
+- inlay hint 参数名提示
+- code action quick fix
+- semantic tokens
 - document highlight
+- folding range
+- selection range
 - rename 生成的 workspace edit
 - 项目根识别
 - 项目文件扫描与项目级上下文加载
@@ -111,7 +121,12 @@ npm run dev -- --stdio
 - `references`
 - `rename`
 - `completion`
+- `inlayHint`
+- `codeAction`
+- `semanticTokens`
 - `diagnostics`
+- `foldingRange`
+- `selectionRange`
 
 ## 后续路线
 

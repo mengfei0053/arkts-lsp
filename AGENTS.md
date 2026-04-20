@@ -15,6 +15,10 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 
 - Improve ArkTS component ergonomics with lightweight semantic handling for `@State`, `@Prop`, and `@Link`.
 - Improve `this.` instance-member completion inside ArkTS components.
+- Add lightweight text-based structural editing helpers such as `selectionRange` without introducing heavy parsing.
+- Add lightweight text-based editor assistance such as `inlayHint` when it clearly improves readability.
+- Add lightweight text-based editor assistance such as `codeAction` when it can reuse existing diagnostics or symbol heuristics.
+- Add lightweight text-based editor assistance such as `semanticTokens` when it can stay declaration- and context-driven.
 - Keep hover, definition, references, and rename behavior aligned with the symbol model already used in the codebase.
 - Preserve the existing import/export and linked-reference behavior while refining it incrementally.
 
