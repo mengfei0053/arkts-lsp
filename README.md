@@ -24,15 +24,18 @@
 
 - 增量文本同步
 - `TODO` 和 `any` 的基础诊断
-- 基础悬浮信息，以及 import/export 感知的符号悬浮
+- 基础悬浮信息，以及 import/export 感知、描述更明确的符号悬浮
 - 基于正则的 ArkTS/TypeScript 常见声明符号提取
 - 文档符号和工作区符号搜索
-- 基于符号名的基础定义跳转
+- 基于符号名的基础定义跳转，以及更贴近当前符号语义的导航结果
 - import/export 感知的 definition、references、rename
+- ArkTS 组件 `@State` / `@Prop` / `@Link` 字段的语义感知 hover、definition、references、rename
 - 基于 ArkTS 关键字、工作区符号和命名 import 导出的轻量补全
+- ArkTS 组件内更准确的 `this.` 实例成员补全
 - imported class 的静态成员补全
 - imported function / class method 的签名提示
 - 相对 import 路径的模块解析与路径补全
+- 相对 import 路径的 DocumentLink / 可点击链接
 - 当前文档中的标识符高亮
 - ArkTS/HarmonyOS 项目根识别
 - `.ets` / `.ts` 文件扫描与项目级文档加载
@@ -49,6 +52,7 @@
 - 逐步从“文本级匹配”升级为“ArkTS 项目级感知”
 - 优先做实 import/export 相关的导航、重命名和补全体验
 - 面向真实鸿蒙项目逐步验证 `opencode` 接入
+- 当行为或工作流发生变化时，及时同步更新 `README.md` 和相关 `AGENTS.md`
 
 ## 快速开始
 
@@ -84,10 +88,12 @@ npm run dev -- --stdio
 - references 查询
 - completion 结果
 - hover 内容格式化
+- ArkTS 组件字段语义与 `this.` 成员补全
 - document highlight
 - rename 生成的 workspace edit
 - 项目根识别
 - 项目文件扫描与项目级上下文加载
+- 相对 import 路径 DocumentLink 生成
 
 ## 最终目标
 

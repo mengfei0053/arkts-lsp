@@ -51,6 +51,11 @@ export type MemberAccessContext = {
   };
 };
 
+export type EnclosingTypeContext = {
+  name: string;
+  kind: "class" | "struct";
+};
+
 export type CallContext = {
   callee: string;
   argumentIndex: number;

@@ -8,6 +8,14 @@ This file applies to everything under `src/`.
 
 - Keep runtime server code easy to read, test, and extend.
 - Separate transport-layer LSP handlers from reusable analysis logic.
+- Keep ArkTS-specific semantics lightweight and localized, especially around component fields, hover, completion, and navigation.
+
+## Current Focus
+
+- `@State`, `@Prop`, and `@Link` field handling inside ArkTS components.
+- `this.` instance-member completion inside component bodies.
+- Hover, definition, references, rename, and document-link flows that stay aligned with the symbol model.
+- Preserve import/export and linked-reference behavior while refining the heuristics incrementally.
 
 ## Implementation Guidelines
 
@@ -21,6 +29,7 @@ This file applies to everything under `src/`.
 
 - If a feature adds a new analysis capability, expose it through a reusable function first when reasonable.
 - If a change alters behavior, add or update tests in `test/`.
+- When a task changes user-visible behavior or workflow, update `README.md` and the nearest relevant `AGENTS.md` in the same change whenever practical.
 - Update this file when the source layout or implementation conventions materially change.
 
 ## Current Boundaries
@@ -31,7 +40,7 @@ This file applies to everything under `src/`.
 - `diagnostics.ts`: basic diagnostic rules
 - `text.ts`: word lookup, import parsing, member/call context parsing, and small text utilities
 - `symbols.ts`: symbol extraction, export discovery, and symbol presentation helpers
-- `navigation.ts`: definition, references, highlights, and rename flows
+- `navigation.ts`: definition, references, document links, highlights, and rename flows
 - `completion.ts`: keyword, import, and class member completion helpers
 - `hover.ts`: base hover and import/export-aware hover
 - `signature.ts`: signature help parsing and resolution

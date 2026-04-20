@@ -1,7 +1,16 @@
 import { CompletionItem, CompletionItemKind } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { collectDocumentSymbols, collectExportedSymbolLocations, displayDocumentName, mapSymbolKindToCompletionKind } from "./symbols.js";
-import { collectImportBindings, escapeRegExp, getMemberAccessContextAtPosition, getNamedImportContextAtPosition } from "./text.js";
+import {
+  collectDocumentSymbols,
+  collectExportedSymbolLocations,
+  collectTypeMemberSymbols,
+  displayDocumentName,
+  mapSymbolKindToCompletionKind,
+  mapTypeMemberKindToCompletionKind,
+} from "./symbols.js";
+import { collectImportBindings, getMemberAccessContextAtPosition, getNamedImportContextAtPosition } from "./text.js";
+
+type MemberCompletionMode = "static" | "instance";
 
 const arktsKeywords = [
   "import",
@@ -95,14 +104,19 @@ export function buildNamedImportCompletionItems(
     }));
 }
 
-export function buildClassMemberCompletionItems(targetDocument: TextDocument, className: string, prefix = ""): CompletionItem[] {
-  return collectClassMembers(targetDocument, className)
+export function buildClassMemberCompletionItems(
+  targetDocument: TextDocument,
+  className: string,
+  prefix = "",
+  mode: MemberCompletionMode = "static",
+): CompletionItem[] {
+  return collectClassMembers(targetDocument, className, mode)
     .filter((member) => !prefix || member.name.toLowerCase().startsWith(prefix.toLowerCase()))
     .slice(0, 100)
     .map((member) => ({
       label: member.name,
       kind: member.kind,
-      detail: `Member of ${className}`,
+      detail: member.detail,
       insertText: member.name,
     }));
 }
@@ -122,61 +136,19 @@ function getCompletionPrefix(document: TextDocument, position: { line: number; c
   return line.slice(start, safeCharacter);
 }
 
-function collectClassMembers(document: TextDocument, className: string): Array<{ name: string; kind: CompletionItemKind }> {
-  const lines = document.getText().split(/\r?\n/u);
-  const classIndex = lines.findIndex((line) =>
-    new RegExp(`^\\s*(?:export\\s+)?(?:abstract\\s+)?class\\s+${escapeRegExp(className)}\\b`, "u").test(line.trim()),
-  );
-  if (classIndex < 0) {
-    return [];
-  }
-
-  const members: Array<{ name: string; kind: CompletionItemKind }> = [];
-  let braceDepth = 0;
-  let inClassBody = false;
-
-  for (let lineIndex = classIndex; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    for (const char of line) {
-      if (char === "{") {
-        braceDepth += 1;
-        inClassBody = true;
-      } else if (char === "}") {
-        braceDepth -= 1;
-        if (inClassBody && braceDepth <= 0) {
-          return dedupeMembers(members);
-        }
-      }
-    }
-
-    if (!inClassBody) {
-      continue;
-    }
-
-    const methodMatch = line.match(/^\s*(?:public\s+|private\s+|protected\s+)?static\s+([A-Za-z_]\w*)\s*\(/u);
-    if (methodMatch) {
-      members.push({ name: methodMatch[1], kind: CompletionItemKind.Method });
-      continue;
-    }
-
-    const propertyMatch = line.match(
-      /^\s*(?:public\s+|private\s+|protected\s+)?static\s+(?:readonly\s+)?([A-Za-z_]\w*)\s*(?::|=)/u,
-    );
-    if (propertyMatch) {
-      members.push({ name: propertyMatch[1], kind: CompletionItemKind.Field });
-    }
-  }
-
-  return dedupeMembers(members);
-}
-
-function dedupeMembers(members: Array<{ name: string; kind: CompletionItemKind }>): Array<{ name: string; kind: CompletionItemKind }> {
-  const seen = new Set<string>();
-  return members.filter((member) => {
-    if (seen.has(member.name)) {
-      return false;
-    }
-    seen.add(member.name);
-    return true;
-  });
+function collectClassMembers(
+  document: TextDocument,
+  className: string,
+  mode: MemberCompletionMode,
+): Array<{ name: string; kind: CompletionItemKind; detail: string }> {
+  return collectTypeMemberSymbols(document, className)
+    .filter((member) => {
+      const isStatic = /\bstatic\b/u.test(member.declarationText);
+      return isStatic === (mode === "static");
+    })
+    .map((member) => ({
+      name: member.name,
+      kind: mapTypeMemberKindToCompletionKind(member.kind),
+      detail: member.decorator ? `@${member.decorator} field of ${className}` : `Member of ${className}`,
+    }));
 }

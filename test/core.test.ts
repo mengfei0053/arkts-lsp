@@ -7,6 +7,7 @@ import {
   buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
+  collectExportedSymbolLocations,
   collectWorkspaceSymbols,
   findDefinitions,
   findDocumentHighlights,
@@ -52,8 +53,9 @@ describe("collectDocumentSymbols", () => {
       "file:///entry.ets",
       [
         "@Entry",
-        "struct HomePage {",
+        "@Component export struct HomePage {",
         "}",
+        "export default struct SplashPage {}",
         "export function loadData() {}",
         "const count = 1;",
         "interface UserProfile {}",
@@ -62,10 +64,12 @@ describe("collectDocumentSymbols", () => {
 
     const symbols = collectDocumentSymbols(document);
 
-    expect(symbols.map((symbol) => symbol.name)).toEqual(["HomePage", "loadData", "count", "UserProfile"]);
+    expect(symbols.map((symbol) => symbol.name)).toEqual(["HomePage", "SplashPage", "loadData", "count", "UserProfile"]);
     expect(symbols[0].kind).toBe(SymbolKind.Class);
-    expect(symbols[0].containerName).toBe("Entry");
-    expect(symbols[1].kind).toBe(SymbolKind.Function);
+    expect(symbols[0].containerName).toBe("Component");
+    expect(symbols[1].kind).toBe(SymbolKind.Class);
+    expect(symbols[1].containerName).toBeUndefined();
+    expect(symbols[2].kind).toBe(SymbolKind.Function);
   });
 });
 
@@ -118,6 +122,39 @@ describe("workspace navigation helpers", () => {
     expect(definitions[1].uri).toBe("file:///second.ets");
   });
 
+  it("finds local definitions for decorated ArkTS component fields before workspace matches", () => {
+    const component = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  @State count: number = 0;",
+        "  build() {",
+        "    return this.count;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const helper = makeDocument("file:///helper.ts", "export const count = 1;");
+
+    const definitions = findDefinitions(
+      {
+        document: component,
+        symbols: [component, helper].flatMap((document) => collectDocumentSymbols(document)),
+      },
+      Position.create(4, 16),
+    );
+
+    expect(definitions).toHaveLength(1);
+    expect(definitions[0]).toMatchObject({
+      uri: "file:///home.ets",
+      range: {
+        start: { line: 2, character: 9 },
+        end: { line: 2, character: 14 },
+      },
+    });
+  });
+
   it("finds references across open documents", () => {
     const first = makeDocument(
       "file:///first.ets",
@@ -133,6 +170,27 @@ describe("workspace navigation helpers", () => {
       "file:///first.ets",
       "file:///second.ets",
     ]);
+  });
+
+  it("finds references for decorated ArkTS component fields without unrelated workspace matches", () => {
+    const component = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  @State count: number = 0;",
+        "  build() {",
+        "    return this.count + this.count;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const helper = makeDocument("file:///helper.ts", "export const count = 1;\ncount;");
+
+    const references = findReferences([component, helper], component, Position.create(4, 16));
+
+    expect(references).toHaveLength(3);
+    expect(references.every((location) => location.uri === "file:///home.ets")).toBe(true);
   });
 
   it("can exclude declarations from reference results", () => {
@@ -173,6 +231,28 @@ describe("workspace navigation helpers", () => {
     expect(edit?.changes?.["file:///first.ets"]).toHaveLength(2);
     expect(edit?.changes?.["file:///second.ets"]).toHaveLength(1);
     expect(edit?.changes?.["file:///first.ets"]?.[0].newText).toBe("loadAccount");
+  });
+
+  it("renames decorated ArkTS component fields without touching unrelated workspace symbols", () => {
+    const component = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  @State count: number = 0;",
+        "  build() {",
+        "    return this.count + this.count;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const helper = makeDocument("file:///helper.ts", "export const count = 1;\ncount;");
+
+    const edit = buildRenameEdit([component, helper], component, Position.create(4, 17), "totalCount");
+
+    expect(edit).not.toBeNull();
+    expect(edit?.changes?.["file:///home.ets"]).toHaveLength(3);
+    expect(edit?.changes?.["file:///helper.ts"]).toBeUndefined();
   });
 
   it("renames an exported symbol across import bindings and same-name usages", () => {
@@ -223,6 +303,65 @@ describe("buildHover", () => {
     expect(hover).not.toBeNull();
     const contents = hover?.contents;
     expect(typeof contents === "object" && "value" in contents ? contents.value : "").toContain("profileName");
+  });
+
+  it("describes decorated ArkTS component fields in hover output", () => {
+    const document = makeDocument(
+      "file:///entry.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  @State count: number = 0;",
+        "  build() {",
+        "    return this.count;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const hover = buildHover(document, Position.create(4, 16));
+
+    const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
+    expect(contents).toContain("State field");
+    expect(contents).toContain("HomePage");
+    expect(contents).toContain("count: number");
+  });
+
+  it("keeps hover semantics for ArkTS fields decorated on separate lines", () => {
+    const document = makeDocument(
+      "file:///entry.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  @Prop",
+        "  title: string = 'ArkTS';",
+        "  build() {",
+        "    return this.title;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const hover = buildHover(document, Position.create(5, 16));
+
+    const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
+    expect(contents).toContain("Prop field");
+    expect(contents).toContain("HomePage");
+    expect(contents).toContain("title: string");
+  });
+
+  it("describes local function symbols in hover output", () => {
+    const document = makeDocument(
+      "file:///entry.ets",
+      ["export function loadProfile(userId: string): string {", "  return userId;", "}", "loadProfile('1');"].join("\n"),
+    );
+
+    const hover = buildHover(document, Position.create(3, 3));
+
+    const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
+    expect(contents).toContain("Function `loadProfile`");
+    expect(contents).toContain("Defined in `entry.ets`");
+    expect(contents).toContain("export function loadProfile(userId: string): string {");
   });
 
   it("returns linked hover information for imported aliases", () => {

@@ -11,6 +11,7 @@ import {
   collectImportBindings,
   findLinkedReferences,
   getCallContextAtPosition,
+  getEnclosingTypeContextAtPosition,
   getImportBindingAtPosition,
   getImportContextAtPosition,
   getMemberAccessContextAtPosition,
@@ -56,6 +57,135 @@ describe("buildCompletionItems", () => {
 
     expect(items.map((item) => item.label)).toEqual(["toHex", "toAscii"]);
     expect(items.every((item) => item.kind === CompletionItemKind.Method)).toBe(true);
+  });
+
+  it("builds instance member completion items for ArkTS structs", () => {
+    const document = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  title: string = 'ArkTS';",
+        "  static styles = 'card';",
+        "  build() {",
+        "    this.t",
+        "  }",
+        "  handleTap(): void {}",
+        "}",
+      ].join("\n"),
+    );
+
+    const items = buildClassMemberCompletionItems(document, "HomePage", "t", "instance");
+
+    expect(items.map((item) => item.label)).toEqual(["title"]);
+    expect(items[0]?.kind).toBe(CompletionItemKind.Field);
+  });
+
+  it("includes instance methods for ArkTS component member completion", () => {
+    const document = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  title: string = 'ArkTS';",
+        "  build() {",
+        "    this.h",
+        "  }",
+        "  handleTap(): void {}",
+        "}",
+      ].join("\n"),
+    );
+
+    const items = buildClassMemberCompletionItems(document, "HomePage", "h", "instance");
+
+    expect(items.map((item) => item.label)).toEqual(["handleTap"]);
+    expect(items[0]?.kind).toBe(CompletionItemKind.Method);
+  });
+
+  it("describes decorated ArkTS component fields in member completion", () => {
+    const document = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  @State count: number = 0;",
+        "  @Prop title: string = 'ArkTS';",
+        "  @Link sharedCount: number = this.count;",
+        "  build() {",
+        "    this.c",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const items = buildClassMemberCompletionItems(document, "HomePage", "c", "instance");
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        label: "count",
+        kind: CompletionItemKind.Field,
+        detail: "@State field of HomePage",
+      }),
+    ]);
+  });
+
+  it("preserves ArkTS field decorator semantics when decorators are on separate lines", () => {
+    const document = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  @Prop",
+        "  title: string = 'ArkTS';",
+        "  @Link",
+        "  sharedCount: number = this.count;",
+        "  build() {",
+        "    this.t",
+        "    this.s",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    expect(buildClassMemberCompletionItems(document, "HomePage", "t", "instance")).toEqual([
+      expect.objectContaining({
+        label: "title",
+        kind: CompletionItemKind.Field,
+        detail: "@Prop field of HomePage",
+      }),
+    ]);
+    expect(buildClassMemberCompletionItems(document, "HomePage", "s", "instance")).toEqual([
+      expect.objectContaining({
+        label: "sharedCount",
+        kind: CompletionItemKind.Field,
+        detail: "@Link field of HomePage",
+      }),
+    ]);
+  });
+
+  it("resolves this member completion inside decorated ArkTS components", () => {
+    const document = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component export struct HomePage {",
+        "  title: string = 'ArkTS';",
+        "  build() {",
+        "    this.h",
+        "  }",
+        "  handleTap(): void {}",
+        "  static styles = 'card';",
+        "}",
+      ].join("\n"),
+    );
+
+    const position = Position.create(3, 10);
+    const memberAccess = getMemberAccessContextAtPosition(document, position);
+    const enclosingType = getEnclosingTypeContextAtPosition(document, position);
+    const items = buildClassMemberCompletionItems(document, enclosingType?.name ?? "", memberAccess?.prefix ?? "", "instance");
+
+    expect(memberAccess?.receiver).toBe("this");
+    expect(enclosingType?.name).toBe("HomePage");
+    expect(items.map((item) => item.label)).toEqual(["handleTap"]);
   });
 
   it("builds signature help for imported class methods", () => {
@@ -177,6 +307,18 @@ describe("import helpers", () => {
     expect(exports.has("hidden")).toBe(false);
   });
 
+  it("collects exported struct symbol locations for ArkTS components", () => {
+    const document = makeDocument(
+      "file:///home.ets",
+      ["@Component export struct HomePage {}", "export default struct SplashPage {}", "export const otherValue = 1;"].join("\n"),
+    );
+
+    const exports = collectExportedSymbolLocations(document);
+
+    expect(exports.get("HomePage")).toHaveLength(1);
+    expect(exports.get("SplashPage")).toHaveLength(1);
+  });
+
   it("finds linked references from an imported alias back to the exported symbol", () => {
     const exported = makeDocument("file:///helper.ts", "export function helper() {}\nhelper();");
     const importer = makeDocument("file:///home.ets", "import { helper as loadHelper } from './helper';\nloadHelper();");
@@ -196,6 +338,23 @@ describe("import helpers", () => {
       "file:///home.ets",
       "file:///home.ets",
     ]);
+  });
+
+  it("finds linked references for exported struct components across imports", () => {
+    const exported = makeDocument("file:///home.ets", "@Entry\nexport struct HomePage {}\nHomePage();");
+    const importer = makeDocument("file:///index.ets", "import { HomePage } from './home';\nHomePage();");
+    const documents = [exported, importer];
+
+    const references = findLinkedReferences(documents, importer, Position.create(1, 2), true, (documentUri, specifier) => {
+      if (documentUri === importer.uri && specifier === "./home") {
+        return exported;
+      }
+      return null;
+    });
+
+    expect(references).toHaveLength(4);
+    expect(references.some((location) => location.uri === "file:///home.ets" && location.range.start.line === 1)).toBe(true);
+    expect(references.some((location) => location.uri === "file:///index.ets" && location.range.start.line === 0)).toBe(true);
   });
 
   it("can omit only the exported declaration from linked references", () => {

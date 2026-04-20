@@ -1,14 +1,16 @@
 import {
   DocumentHighlight,
   DocumentHighlightKind,
+  DocumentLink,
   Location,
   Position,
   TextEdit,
   WorkspaceEdit,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { collectDocumentSymbols, collectExportedSymbolLocations } from "./symbols.js";
+import { collectDocumentSymbols, collectExportedSymbolLocations, findDocumentMemberSymbolAtPosition } from "./symbols.js";
 import {
+  collectImportContexts,
   collectImportBindings,
   collectWordLocations,
   getImportBindingAtPosition,
@@ -19,6 +21,11 @@ import {
 import { DefinitionContext, ImportBinding, LinkedReferenceTarget } from "./types.js";
 
 export function findDefinitions({ document, symbols }: DefinitionContext, position: Position): Location[] {
+  const member = findDocumentMemberSymbolAtPosition(document, position);
+  if (member) {
+    return [member.location];
+  }
+
   const word = getWordAtPosition(document, position);
   if (!word) {
     return [];
@@ -41,6 +48,12 @@ export function findReferencesWithOptions(
   position: Position,
   includeDeclaration: boolean,
 ): Location[] {
+  const member = findDocumentMemberSymbolAtPosition(document, position);
+  if (member) {
+    const references = collectScopedWordLocations(document, member.name, member.scopeRange);
+    return includeDeclaration ? references : references.filter((location) => locationKey(location) !== locationKey(member.location));
+  }
+
   const word = getWordAtPosition(document, position);
   if (!word) {
     return [];
@@ -93,12 +106,36 @@ export function findDocumentHighlights(document: TextDocument, position: Positio
     : [];
 }
 
+export function collectRelativeImportDocumentLinks(
+  document: TextDocument,
+  resolveImportTarget: (specifier: string) => TextDocument | null,
+): DocumentLink[] {
+  return collectImportContexts(document)
+    .filter((context) => context.specifier.startsWith("."))
+    .flatMap((context) => {
+      const target = resolveImportTarget(context.specifier);
+      return target && !target.uri.endsWith(".d.ts") ? [{ range: context.range, target: target.uri }] : [];
+    });
+}
+
 export function buildRenameEdit(
   documents: TextDocument[],
   document: TextDocument,
   position: Position,
   newName: string,
 ): WorkspaceEdit | null {
+  const member = findDocumentMemberSymbolAtPosition(document, position);
+  if (member) {
+    const trimmedName = newName.trim();
+    if (!trimmedName || member.name === trimmedName) {
+      return null;
+    }
+
+    const changes: Record<string, TextEdit[]> = {};
+    addEdits(changes, document.uri, collectScopedWordLocations(document, member.name, member.scopeRange), trimmedName);
+    return Object.keys(changes).length > 0 ? { changes: dedupeTextEdits(changes) } : null;
+  }
+
   const oldName = getWordAtPosition(document, position);
   if (!oldName || !newName.trim() || oldName === newName) {
     return null;
@@ -230,6 +267,14 @@ function addEdits(changes: Record<string, TextEdit[]>, uri: string, locations: L
     ...(changes[uri] ?? []),
     ...locations.map((location) => ({ range: location.range, newText })),
   ];
+}
+
+function collectScopedWordLocations(
+  document: TextDocument,
+  word: string,
+  scopeRange: { start: Position; end: Position },
+): Location[] {
+  return collectWordLocations(document, word).filter((location) => isPositionWithinRange(location.range.start, scopeRange));
 }
 
 function dedupeLocations(locations: Location[]): Location[] {

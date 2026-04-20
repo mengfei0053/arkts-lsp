@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { Position } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import * as core from "../src/core.js";
 import {
   collectDocumentSymbols,
   collectExportedSymbolLocations,
@@ -131,6 +132,57 @@ describe("project detection", () => {
     const specifiers = listRelativeModuleSpecifiers(homeUri, "../", context.documents);
 
     expect(specifiers).toContain("../util/helper");
+  });
+
+  it("builds document links for resolvable relative import specifiers", () => {
+    const project = createProject({
+      "AppScope/app.json5": "{}",
+      "hvigorfile.ts": "export default {};",
+      "entry/src/main/ets/pages/Home.ets": [
+        "import { helper } from '../util/helper';",
+        "import { missing } from '../util/missing';",
+        "import { lib } from '@ohos/lib';",
+      ].join("\n"),
+      "entry/src/main/ets/util/helper.ts": "export function helper() {}",
+    });
+
+    const homeUri = pathToFileURL(join(project, "entry/src/main/ets/pages/Home.ets")).toString();
+    const helperUri = pathToFileURL(join(project, "entry/src/main/ets/util/helper.ts")).toString();
+    const home = loadDocumentFromUri(homeUri, []);
+    const context = buildProjectContext(homeUri, []);
+    const collectRelativeImportDocumentLinks = (core as Record<string, unknown>).collectRelativeImportDocumentLinks as
+      | ((document: TextDocument, resolveImportTarget: (specifier: string) => TextDocument | null) => { target?: string; range: { start: Position; end: Position } }[])
+      | undefined;
+
+    const links = home && collectRelativeImportDocumentLinks
+      ? collectRelativeImportDocumentLinks(home, (specifier) => resolveRelativeModule(homeUri, specifier, context.documents))
+      : [];
+
+    expect(links).toHaveLength(1);
+    expect(home?.getText(links[0].range)).toBe("../util/helper");
+    expect(links[0].target).toBe(helperUri);
+  });
+
+  it("skips document links for relative specifiers that only resolve to .d.ts files", () => {
+    const project = createProject({
+      "AppScope/app.json5": "{}",
+      "hvigorfile.ts": "export default {};",
+      "entry/src/main/ets/pages/Home.ets": "import type { Settings } from '../types/settings';",
+      "entry/src/main/ets/types/settings.d.ts": "export interface Settings { enabled: boolean; }",
+    });
+
+    const homeUri = pathToFileURL(join(project, "entry/src/main/ets/pages/Home.ets")).toString();
+    const home = loadDocumentFromUri(homeUri, []);
+    const context = buildProjectContext(homeUri, []);
+    const collectRelativeImportDocumentLinks = (core as Record<string, unknown>).collectRelativeImportDocumentLinks as
+      | ((document: TextDocument, resolveImportTarget: (specifier: string) => TextDocument | null) => { target?: string; range: { start: Position; end: Position } }[])
+      | undefined;
+
+    const links = home && collectRelativeImportDocumentLinks
+      ? collectRelativeImportDocumentLinks(home, (specifier) => resolveRelativeModule(homeUri, specifier, context.documents))
+      : [];
+
+    expect(links).toHaveLength(0);
   });
 });
 

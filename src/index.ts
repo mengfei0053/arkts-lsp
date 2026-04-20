@@ -3,6 +3,7 @@ import {
   createConnection,
   DidChangeConfigurationNotification,
   DocumentHighlight,
+  DocumentLink,
   Hover,
   InitializeParams,
   InitializeResult,
@@ -25,6 +26,7 @@ import {
   buildRenameEdit,
   collectDiagnostics,
   collectDocumentSymbols,
+  collectRelativeImportDocumentLinks,
   collectExportedSymbolLocations,
   collectWorkspaceSymbols,
   findDefinitions,
@@ -33,6 +35,7 @@ import {
   findReferencesWithOptions,
   getImportBindingAtPosition,
   getImportContextAtPosition,
+  getEnclosingTypeContextAtPosition,
   getMemberAccessContextAtPosition,
   getNamedImportContextAtPosition,
   ServerSettings,
@@ -64,6 +67,9 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       definitionProvider: true,
       referencesProvider: true,
       documentHighlightProvider: true,
+      documentLinkProvider: {
+        resolveProvider: false,
+      },
       renameProvider: {
         prepareProvider: false,
       },
@@ -193,6 +199,18 @@ connection.onDocumentHighlight(({ textDocument, position }): DocumentHighlight[]
   return findDocumentHighlights(document, position);
 });
 
+connection.onDocumentLinks(({ textDocument }): DocumentLink[] => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  if (!document) {
+    return [];
+  }
+
+  const project = buildProjectContext(textDocument.uri, documents.all());
+  return collectRelativeImportDocumentLinks(document, (specifier) =>
+    resolveRelativeModule(textDocument.uri, specifier, project.documents),
+  );
+});
+
 connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
   const document = loadDocumentFromUri(textDocument.uri, documents.all());
   if (!document) {
@@ -202,6 +220,16 @@ connection.onCompletion(({ textDocument, position }): CompletionItem[] => {
   const project = buildProjectContext(textDocument.uri, documents.all());
   const memberAccessContext = getMemberAccessContextAtPosition(document, position);
   if (memberAccessContext) {
+    if (memberAccessContext.receiver === "this") {
+      const enclosingType = getEnclosingTypeContextAtPosition(document, position);
+      if (enclosingType) {
+        const items = buildClassMemberCompletionItems(document, enclosingType.name, memberAccessContext.prefix, "instance");
+        if (items.length > 0) {
+          return items;
+        }
+      }
+    }
+
     const importBinding = getImportBindingAtPosition(
       document,
       {

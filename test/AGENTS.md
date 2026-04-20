@@ -9,6 +9,7 @@ This file applies to everything under `test/`.
 - Protect the current MVP behaviors from regression.
 - Keep tests fast enough to run on every local iteration.
 - Prefer deterministic tests over environment-dependent checks.
+- Cover ArkTS semantic tweaks with focused regression tests when behavior changes.
 
 ## Test Strategy
 
@@ -22,4 +23,5 @@ This file applies to everything under `test/`.
 
 - New user-visible behavior should usually add at least one test.
 - Bug fixes should include a regression test when practical.
+- When a task changes user-visible behavior or workflow, update `README.md` and the nearest relevant `AGENTS.md` in the same change whenever practical.
 - Update this file if test organization or test philosophy changes.

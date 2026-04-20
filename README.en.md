@@ -20,15 +20,18 @@ The repository is currently focused on a clean, iterative MVP:
 
 - incremental text synchronization
 - TODO and `any` diagnostics
-- basic hover plus import/export-aware symbol hover
+- basic hover plus import/export-aware, more descriptive symbol hover
 - regex-based symbol extraction for common ArkTS/TypeScript declarations
 - document symbols and workspace symbols
-- basic definition lookup by symbol name
+- basic definition lookup by symbol name, with more semantically relevant navigation results
 - import/export-aware definition, references, and rename
+- semantic hover, definition, references, and rename for ArkTS component fields using `@State`, `@Prop`, and `@Link`
 - lightweight completion from ArkTS keywords, indexed workspace symbols, and named-import exports
+- more accurate `this.` instance-member completion inside ArkTS components
 - static member completion for imported classes
 - signature help for imported functions and class methods
 - relative import path resolution and path completion
+- document links for relative import specifiers
 - exact-word document highlights in the current file
 - ArkTS/HarmonyOS project root detection
 - `.ets` / `.ts` file scanning and project-level document loading
@@ -45,6 +48,7 @@ This is still an early scaffold focused on:
 - gradually moving from text-level matching to ArkTS project-aware behavior
 - prioritizing import/export-aware navigation, rename, and completion flows
 - validating `opencode` integration against real HarmonyOS projects
+- keeping `README.md` and relevant `AGENTS.md` files updated when behavior or workflow changes
 
 ## Quick Start
 
@@ -80,10 +84,12 @@ Current tests cover the core behaviors that are easiest to regress while the ser
 - reference lookup
 - completion results
 - hover formatting
+- ArkTS component field semantics and `this.` member completion
 - document highlight
 - rename workspace edits
 - project root detection
 - project file scanning and project-context loading
+- document-link generation for relative import specifiers
 
 ## End Goal
 

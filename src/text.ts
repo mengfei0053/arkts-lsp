@@ -1,6 +1,6 @@
 import { Location, Position } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { CallContext, ImportBinding, ImportContext, MemberAccessContext, NamedImportContext } from "./types.js";
+import { CallContext, EnclosingTypeContext, ImportBinding, ImportContext, MemberAccessContext, NamedImportContext } from "./types.js";
 
 export function collectImportBindings(document: TextDocument): ImportBinding[] {
   const bindings: ImportBinding[] = [];
@@ -89,12 +89,17 @@ export function getImportBindingAtPosition(document: TextDocument, position: Pos
 }
 
 export function getImportContextAtPosition(document: TextDocument, position: Position): ImportContext | null {
+  return collectImportContexts(document).find((context) => isPositionWithinRange(position, context.range)) ?? null;
+}
+
+export function collectImportContexts(document: TextDocument): ImportContext[] {
+  const contexts: ImportContext[] = [];
   const lines = document.getText().split(/\r?\n/u);
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex];
     const importMatch = line.match(/^\s*import\s+.*?from\s+["']([^"']*)["']/u) ?? line.match(/^\s*import\s+["']([^"']*)["']/u);
-    if (!importMatch || importMatch.index === undefined || position.line !== lineIndex) {
+    if (!importMatch || importMatch.index === undefined) {
       continue;
     }
 
@@ -105,21 +110,16 @@ export function getImportContextAtPosition(document: TextDocument, position: Pos
     }
 
     const absoluteStart = importMatch.index + relativeStart;
-    const absoluteEnd = absoluteStart + specifier.length;
-    if (position.character < absoluteStart || position.character > absoluteEnd) {
-      continue;
-    }
-
-    return {
+    contexts.push({
       specifier,
       range: {
         start: { line: lineIndex, character: absoluteStart },
-        end: { line: lineIndex, character: absoluteEnd },
+        end: { line: lineIndex, character: absoluteStart + specifier.length },
       },
-    };
+    });
   }
 
-  return null;
+  return contexts;
 }
 
 export function getNamedImportContextAtPosition(document: TextDocument, position: Position): NamedImportContext | null {
@@ -173,6 +173,57 @@ export function getMemberAccessContextAtPosition(document: TextDocument, positio
       start: { line: position.line, character: receiverStart },
       end: { line: position.line, character: safeCharacter },
     },
+  };
+}
+
+export function getEnclosingTypeContextAtPosition(document: TextDocument, position: Position): EnclosingTypeContext | null {
+  const lines = document.getText().split(/\r?\n/u);
+  let braceDepth = 0;
+  let pendingType: EnclosingTypeContext | null = null;
+  const typeStack: Array<EnclosingTypeContext & { bodyDepth: number }> = [];
+
+  for (let lineIndex = 0; lineIndex <= position.line && lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const limit = lineIndex === position.line ? Math.min(position.character, line.length) : line.length;
+
+    if (!pendingType) {
+      const declaration = matchArktsTypeDeclaration(line);
+      if (declaration) {
+        pendingType = declaration;
+      }
+    }
+
+    for (let index = 0; index < limit; index += 1) {
+      const char = line[index];
+      if (char === "{") {
+        braceDepth += 1;
+        if (pendingType) {
+          typeStack.push({ ...pendingType, bodyDepth: braceDepth });
+          pendingType = null;
+        }
+      } else if (char === "}") {
+        while (typeStack.length > 0 && braceDepth === typeStack[typeStack.length - 1].bodyDepth) {
+          typeStack.pop();
+        }
+        braceDepth = Math.max(0, braceDepth - 1);
+      }
+    }
+  }
+
+  const enclosingType = typeStack.at(-1);
+  return enclosingType ? { name: enclosingType.name, kind: enclosingType.kind } : null;
+}
+
+export function matchArktsTypeDeclaration(line: string): EnclosingTypeContext | null {
+  const declaration = line.trim().replace(/^(?:@[A-Za-z_]\w*(?:\([^)]*\))?\s+)*/u, "");
+  const declarationMatch = declaration.match(/^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(class|struct)\s+([A-Za-z_]\w*)\b/u);
+  if (!declarationMatch) {
+    return null;
+  }
+
+  return {
+    kind: declarationMatch[1] as "class" | "struct",
+    name: declarationMatch[2],
   };
 }
 
