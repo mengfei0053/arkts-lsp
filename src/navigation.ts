@@ -8,6 +8,7 @@ import {
   WorkspaceEdit,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { findNodesByType, getDecoratorNames, parseArkTS } from "./parser.js";
 import { collectAllTypeMemberSymbols, collectDocumentSymbols, collectExportedSymbolLocations, findDocumentMemberSymbolAtPosition } from "./symbols.js";
 import {
   collectImportContexts,
@@ -31,6 +32,13 @@ export function findDefinitions({ document, symbols, documents }: DefinitionCont
         .map((candidate) => candidate.location);
       if (providerDefinitions.length > 0) {
         return providerDefinitions;
+      }
+    }
+
+    if (member.decorator === "ObjectLink" && documents) {
+      const observedDefinitions = findObservedTypeDefinitions(documents, member.declarationText);
+      if (observedDefinitions.length > 0) {
+        return observedDefinitions;
       }
     }
     return [member.location];
@@ -67,6 +75,14 @@ export function findReferencesWithOptions(
       const references = dedupeLocations(
         linkedMembers.flatMap((candidate) => collectScopedWordLocationsByMember(documents, candidate)),
       );
+      return includeDeclaration ? references : references.filter((location) => locationKey(location) !== locationKey(member.location));
+    }
+
+    if (member.decorator === "ObjectLink") {
+      const references = dedupeLocations([
+        ...findObservedTypeDefinitions(documents, member.declarationText),
+        ...collectScopedWordLocations(document, member.name, member.scopeRange),
+      ]);
       return includeDeclaration ? references : references.filter((location) => locationKey(location) !== locationKey(member.location));
     }
 
@@ -320,6 +336,46 @@ function collectScopedWordLocationsByMember(
     return [member.location];
   }
   return collectScopedWordLocations(document, member.name, member.scopeRange);
+}
+
+function findObservedTypeDefinitions(documents: TextDocument[], declarationText: string): Location[] {
+  const observedTypeName = extractAnnotatedTypeName(declarationText);
+  if (!observedTypeName) {
+    return [];
+  }
+
+  return documents.flatMap((document) => {
+    if (!hasObservedDeclaration(document, observedTypeName)) {
+      return [];
+    }
+    return collectDocumentSymbols(document)
+      .filter((symbol) => symbol.name === observedTypeName)
+      .map((symbol) => symbol.location);
+  });
+}
+
+function extractAnnotatedTypeName(declarationText: string): string | null {
+  const match = declarationText.match(/:\s*([A-Za-z_]\w*)/u);
+  return match?.[1] ?? null;
+}
+
+function hasObservedDeclaration(document: TextDocument, typeName: string): boolean {
+  const tree = parseArkTS(document);
+  if (!tree) {
+    return false;
+  }
+
+  for (const type of ["class_declaration", "struct_declaration"] as const) {
+    const match = findNodesByType(tree, type).find((node) => {
+      const identifier = node.children.find((child) => child.type === "type_identifier" || child.type === "identifier");
+      return identifier?.text === typeName;
+    });
+    if (match && getDecoratorNames(match).includes("Observed")) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function dedupeLocations(locations: Location[]): Location[] {

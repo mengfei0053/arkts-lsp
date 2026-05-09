@@ -52,7 +52,7 @@
 ### ArkTS 专属能力
 - [ ] **Tree-sitter 运行时接管** —— 解析器适配层已完成，且已开始接入 `symbols.ts`、`navigation.ts`、`completion.ts`、`diagnostics.ts`，但仍未全面 AST 化
 - [x] **`@Builder` / `@BuilderParam`** —— 已完成基础 hover / completion / navigation
-- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover，且已支持 `@Consume -> @Provide` 的基础 definition 配对，以及 provider/consumer 双向 references / rename 联动；`@Observed/@ObjectLink` 观察链已有基础提示，但仍未完全建模
+- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover；`@Provide/@Consume` 已支持 `@Consume -> @Provide` 的基础 definition 配对，以及 provider/consumer 双向 references / rename 联动；`@ObjectLink` 已支持跳转到匹配的 `@Observed` 类型定义，并在 references 中联动对应 `@Observed` 类型声明；但 `@Observed/@ObjectLink` 观察链仍未完全建模
 - [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用、嵌套组件树，并给组件树节点附加源码 range、组件路径（path）、实参（arguments）、链式修饰器（modifiers）、结构化 props、基础 `@Builder` 绑定关系；但尚未构建完整组件语义模型（如 slot/builder 作用域关系、跨组件 props 归类等）
 - [ ] **ArkTS 类型系统感知** —— 联合类型、可选链、类型守卫等尚未建模
 - [ ] **HarmonyOS API 面增强** —— 目前不是 SDK 驱动，也没有完整签名库

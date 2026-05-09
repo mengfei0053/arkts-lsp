@@ -321,6 +321,76 @@ describe("workspace navigation helpers", () => {
     expect(references.every((location) => location.uri === "file:///home.ets")).toBe(true);
   });
 
+  it("resolves @ObjectLink fields to matching @Observed type definitions across documents", () => {
+    const observed = makeDocument(
+      "file:///model.ets",
+      [
+        "@Observed",
+        "export class FormState {",
+        "  value: number = 0;",
+        "}",
+      ].join("\n"),
+    );
+    const viewer = makeDocument(
+      "file:///viewer.ets",
+      [
+        "struct Viewer {",
+        "  @ObjectLink form: FormState;",
+        "  build() {",
+        "    return this.form.value;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const definitions = findDefinitions(
+      {
+        document: viewer,
+        documents: [observed, viewer],
+        symbols: [observed, viewer].flatMap((document) => collectDocumentSymbols(document)),
+      },
+      Position.create(1, 16),
+    );
+
+    expect(definitions).toHaveLength(1);
+    expect(definitions[0]).toMatchObject({
+      uri: "file:///model.ets",
+      range: {
+        start: { line: 1, character: 13 },
+        end: { line: 1, character: 22 },
+      },
+    });
+  });
+
+  it("includes @Observed type declarations in @ObjectLink references", () => {
+    const observed = makeDocument(
+      "file:///model.ets",
+      [
+        "@Observed",
+        "export class FormState {",
+        "  value: number = 0;",
+        "}",
+      ].join("\n"),
+    );
+    const viewer = makeDocument(
+      "file:///viewer.ets",
+      [
+        "struct Viewer {",
+        "  @ObjectLink form: FormState;",
+        "  build() {",
+        "    return this.form.value;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const references = findReferences([observed, viewer], viewer, Position.create(3, 16));
+
+    expect(references.some((location) => location.uri === "file:///model.ets" && location.range.start.line === 1)).toBe(true);
+    expect(references.some((location) => location.uri === "file:///viewer.ets" && location.range.start.line === 1)).toBe(true);
+    expect(references.some((location) => location.uri === "file:///viewer.ets" && location.range.start.line === 3)).toBe(true);
+  });
+
   it("can exclude declarations from reference results", () => {
     const first = makeDocument(
       "file:///first.ets",
