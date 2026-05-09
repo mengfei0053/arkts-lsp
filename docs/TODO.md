@@ -8,8 +8,9 @@ These capabilities are working and covered by tests:
 
 - **Text synchronization**: incremental `didOpen` / `didChange` / `didClose`
 - **Diagnostics**: TODO and `any` markers
-- **Hover**: basic symbol info + import/export-aware descriptions
+- **Hover**: basic symbol info + import/export-aware descriptions + decorator-aware `@Builder` hover
 - **Symbol extraction**: regex-based ArkTS/TypeScript declaration parsing
+- **Tree-sitter parser adapter**: `src/parser.ts` with AST-backed helpers for structs, decorators, builder functions, builder params, members, imports, and top-level declarations
 - **Document & workspace symbols**: filtering and search
 - **Definition**: symbol-name based + import/export-aware + relative import path jumps
 - **References**: import/export-aware lookup
@@ -20,6 +21,7 @@ These capabilities are working and covered by tests:
 - **Code actions**: quick fixes for TODO / `any` diagnostics
 - **Semantic tokens**: keywords, types, functions, variables, decorators, properties
 - **Import path resolution**: relative path completion + DocumentLink (clickable)
+- **HarmonyOS module resolution (minimal)**: `resolveModuleSpecifier()` for relative imports, `@kit.*`, and `@ohos.*` with built-in virtual-module metadata
 - **Document highlight**: exact-word identifier highlighting
 - **Folding range**: multi-line brace blocks
 - **Selection range**: identifiers, statements, brace blocks
@@ -38,21 +40,23 @@ These exist at a text-heuristic level and should be upgraded to project-aware be
 | **Completion** | Regex + workspace index + named-import exports | AST-aware completion, context-sensitive suggestions |
 | **Diagnostics** | Simple TODO / `any` pattern matching | ArkTS-specific linting (type errors, decorator misuse, etc.) |
 | **Semantic tokens** | Token + regex-based classification | Type-checker driven token types and modifiers |
-| **Hover** | Symbol info from extracted declarations | Type signatures, JSDoc, decorator metadata |
+| **Hover** | Symbol info from extracted declarations plus `@Builder` decorator awareness | Type signatures, JSDoc, richer decorator metadata |
 | **Inlay hints** | Local function parameters | Type inference hints, implicit return types, chained call params |
+| **Parser rollout** | AST helper layer exists in `src/parser.ts`, but runtime symbol/navigation flows still mostly use regex/text heuristics | Parser-backed symbol model used across hover, diagnostics, symbols, navigation, and completion |
+| **HarmonyOS API knowledge** | Minimal built-in metadata for `@kit.*` / `@ohos.*` and virtual module docs | SDK-backed signatures, richer completion, hover, and navigation |
 
 ## 🔴 Not Yet Implemented
 
-These are planned but not started:
+These are still incomplete or not started:
 
 ### ArkTS-Specific Features
-- [ ] **Tree-sitter or lightweight ArkTS parser integration** — replace regex-based symbol extraction with real parsing
-- [ ] **`@Builder` / `@BuilderParam` support** — hover, completion, navigation for builder functions
-- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` decorators** — state management field semantics
+- [ ] **Tree-sitter parser rollout into runtime** — current parser adapter exists, but `symbols.ts`, `navigation.ts`, `completion.ts`, and `diagnostics.ts` are not yet broadly AST-driven
+- [x] **`@Builder` / `@BuilderParam` support** — hover, completion, navigation for builder functions
+- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` decorators** — state management field semantics beyond simple decorator display
 - [ ] **`build()` method analysis** — UI component tree awareness
 - [ ] **ArkTS type system awareness** — union types, optional chaining, type guards
-- [ ] **HarmonyOS API surface knowledge** — built-in module completion and hover for `@kit` imports
-- [ ] **ETS module resolution** — resolve `import { x } from '@kit.*'` and `import { x } from '@ohos.*'`
+- [ ] **HarmonyOS API surface knowledge** — current built-in metadata is minimal and not SDK-backed
+- [x] **ETS module resolution** — minimal `@kit.*` / `@ohos.*` resolution via `resolveModuleSpecifier()` and virtual module documents
 
 ### LSP Protocol Extensions
 - [ ] **Document symbols with hierarchy** — tree-structured outline view (current: flat list)

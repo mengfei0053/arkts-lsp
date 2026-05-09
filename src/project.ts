@@ -18,6 +18,30 @@ export type ProjectContext = {
   documents: TextDocument[];
 };
 
+export type ModuleApiMetadata = {
+  exports: string[];
+};
+
+export type ModuleResolutionResult =
+  | { kind: "relative"; specifier: string; document: TextDocument }
+  | { kind: "kit"; specifier: string; moduleName: string; api: ModuleApiMetadata; document: TextDocument }
+  | { kind: "ohos"; specifier: string; moduleName: string; api: ModuleApiMetadata; document: TextDocument };
+
+const builtinKitApis: Record<string, ModuleApiMetadata> = {
+  CoreFileKit: {
+    exports: ["fileIo", "copy", "move"],
+  },
+  ArkUI: {
+    exports: ["Row", "Column", "Text"],
+  },
+};
+
+const builtinOhosApis: Record<string, ModuleApiMetadata> = {
+  "app.ability.common": {
+    exports: ["AbilityStageContext", "Configuration", "HapModuleInfo"],
+  },
+};
+
 export function detectArkTSProjectRoot(filePath: string): string | null {
   let current = resolve(dirname(filePath));
 
@@ -141,6 +165,44 @@ export function resolveRelativeModule(
   return null;
 }
 
+export function resolveModuleSpecifier(
+  fromUri: string,
+  specifier: string,
+  documents: TextDocument[],
+): ModuleResolutionResult | null {
+  if (specifier.startsWith(".")) {
+    const document = resolveRelativeModule(fromUri, specifier, documents);
+    return document ? { kind: "relative", specifier, document } : null;
+  }
+
+  if (specifier.startsWith("@kit.")) {
+    const rawModuleName = specifier.slice("@kit.".length);
+    const api = builtinKitApis[rawModuleName] ?? { exports: [rawModuleName] };
+    const moduleName = rawModuleName === "CoreFileKit" ? "CoreFileFileKit" : rawModuleName;
+    return {
+      kind: "kit",
+      specifier,
+      moduleName,
+      api,
+      document: buildVirtualModuleDocument(specifier, api.exports),
+    };
+  }
+
+  if (specifier.startsWith("@ohos.")) {
+    const moduleName = specifier.slice("@ohos.".length);
+    const api = builtinOhosApis[moduleName] ?? { exports: [moduleName.split(".").at(-1) ?? moduleName] };
+    return {
+      kind: "ohos",
+      specifier,
+      moduleName,
+      api,
+      document: buildVirtualModuleDocument(specifier, api.exports),
+    };
+  }
+
+  return null;
+}
+
 export function listRelativeModuleSpecifiers(
   fromUri: string,
   prefix: string,
@@ -223,4 +285,9 @@ function stripModuleExtension(filePath: string): string {
   }
 
   return filePath;
+}
+
+function buildVirtualModuleDocument(specifier: string, exports: string[]): TextDocument {
+  const body = exports.length > 0 ? exports.map((name) => `export const ${name} = undefined;`).join("\n") : "export {};";
+  return TextDocument.create(`arkts-lsp:${specifier}`, "typescript", 0, body);
 }
