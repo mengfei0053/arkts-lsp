@@ -469,6 +469,9 @@ describe("parser edge cases", () => {
     expect(componentTree).toEqual([
       {
         name: "Column",
+        path: ["Column"],
+        arguments: [],
+        modifiers: [],
         range: {
           start: { line: 3, character: 4 },
           end: { line: 8, character: 5 },
@@ -476,6 +479,9 @@ describe("parser edge cases", () => {
         children: [
           {
             name: "Text",
+            path: ["Column", "Text"],
+            arguments: ["'hello'"],
+            modifiers: [],
             range: {
               start: { line: 4, character: 6 },
               end: { line: 4, character: 19 },
@@ -484,6 +490,9 @@ describe("parser edge cases", () => {
           },
           {
             name: "Row",
+            path: ["Column", "Row"],
+            arguments: [],
+            modifiers: [],
             range: {
               start: { line: 5, character: 6 },
               end: { line: 7, character: 7 },
@@ -491,6 +500,9 @@ describe("parser edge cases", () => {
             children: [
               {
                 name: "Button",
+                path: ["Column", "Row", "Button"],
+                arguments: ["'ok'"],
+                modifiers: [],
                 range: {
                   start: { line: 6, character: 8 },
                   end: { line: 6, character: 20 },
@@ -534,6 +546,53 @@ describe("parser edge cases", () => {
       range: {
         start: { line: 4, character: 6 },
       },
+    });
+  });
+
+  it("captures build() component arguments, modifiers, and paths", () => {
+    const document = makeDocument(
+      "file:///complex.ets",
+      [
+        "@Component",
+        "struct ComplexPage {",
+        "  build() {",
+        "    Column() {",
+        "      Text(this.title)",
+        "        .fontSize(18)",
+        "        .fontWeight(FontWeight.Bold);",
+        "      Row() {",
+        "        Button('Save').width(120);",
+        "      }",
+        "    }",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const tree = parseArkTS(document)!;
+    const componentTree = getBuildMethodComponentTree(tree, "ComplexPage");
+
+    expect(componentTree[0]).toMatchObject({
+      name: "Column",
+      path: ["Column"],
+      arguments: [],
+      modifiers: [],
+    });
+    expect(componentTree[0]?.children[0]).toMatchObject({
+      name: "Text",
+      path: ["Column", "Text"],
+      arguments: ["this.title"],
+      modifiers: ["fontSize(18)", "fontWeight(FontWeight.Bold)"],
+    });
+    expect(componentTree[0]?.children[1]).toMatchObject({
+      name: "Row",
+      path: ["Column", "Row"],
+    });
+    expect(componentTree[0]?.children[1]?.children[0]).toMatchObject({
+      name: "Button",
+      path: ["Column", "Row", "Button"],
+      arguments: ["'Save'"],
+      modifiers: ["width(120)"],
     });
   });
 });

@@ -74,6 +74,9 @@ export type BuildMethodComponentCall = {
 
 export type BuildMethodComponentTreeNode = {
   name: string;
+  path: string[];
+  arguments: string[];
+  modifiers: string[];
   range: {
     start: ArkTSPoint;
     end: ArkTSPoint;
@@ -308,7 +311,7 @@ function findBuildMethodNode(tree: ArkTSTree, structName: string): ArkTSNode | n
   ) ?? null;
 }
 
-function buildComponentTreeFromNode(node: ArkTSNode): BuildMethodComponentTreeNode[] {
+function buildComponentTreeFromNode(node: ArkTSNode, ancestorPath: string[] = []): BuildMethodComponentTreeNode[] {
   const result: BuildMethodComponentTreeNode[] = [];
   for (const child of node.children) {
     if (child.type === "component_statement") {
@@ -317,23 +320,30 @@ function buildComponentTreeFromNode(node: ArkTSNode): BuildMethodComponentTreeNo
         continue;
       }
       const block = child.children.find((entry) => entry.type === "statement_block");
+      const path = [...ancestorPath, name];
       result.push({
         name,
+        path,
+        arguments: extractArguments(findChildNode(child, "arguments")),
+        modifiers: [],
         range: {
           start: child.startPosition,
           end: child.endPosition,
         },
-        children: block ? buildComponentTreeFromNode(block) : [],
+        children: block ? buildComponentTreeFromNode(block, path) : [],
       });
       continue;
     }
 
     if (child.type === "expression_statement") {
       const call = child.children.find((entry) => entry.type === "call_expression");
-      const name = call ? findFirstCallName(call) : null;
-      if (name && startsWithUppercase(name)) {
+      const componentDetails = call ? extractComponentCallDetails(call) : null;
+      if (componentDetails && startsWithUppercase(componentDetails.name)) {
         result.push({
-          name,
+          name: componentDetails.name,
+          path: [...ancestorPath, componentDetails.name],
+          arguments: componentDetails.arguments,
+          modifiers: componentDetails.modifiers,
           range: {
             start: call?.startPosition ?? child.startPosition,
             end: call?.endPosition ?? child.endPosition,
@@ -345,6 +355,61 @@ function buildComponentTreeFromNode(node: ArkTSNode): BuildMethodComponentTreeNo
     }
   }
   return result;
+}
+
+function extractComponentCallDetails(node: ArkTSNode): { name: string; arguments: string[]; modifiers: string[] } | null {
+  const chain = unwrapCallChain(node);
+  const rootCall = chain.at(0);
+  const rootName = rootCall ? findFirstCallName(rootCall) : null;
+  if (!rootCall || !rootName) {
+    return null;
+  }
+
+  return {
+    name: rootName,
+    arguments: extractArguments(findChildNode(rootCall, "arguments")),
+    modifiers: chain.slice(1).flatMap((call) => {
+      const modifierName = findPropertyNameFromCall(call);
+      if (!modifierName) {
+        return [];
+      }
+      const args = formatArguments(findChildNode(call, "arguments"));
+      return [`${modifierName}(${args.join(", ")})`];
+    }),
+  };
+}
+
+function unwrapCallChain(node: ArkTSNode): ArkTSNode[] {
+  const chain: ArkTSNode[] = [];
+  let current: ArkTSNode | undefined = node;
+  while (current?.type === "call_expression") {
+    chain.unshift(current);
+    current = current.children.find((child) => child.type === "member_expression" || child.type === "call_expression");
+    if (current?.type === "member_expression") {
+      current = current.children.find((child) => child.type === "call_expression");
+    }
+  }
+  return chain;
+}
+
+function extractArguments(node: ArkTSNode | undefined): string[] {
+  return formatArguments(node);
+}
+
+function formatArguments(node: ArkTSNode | undefined): string[] {
+  if (!node) {
+    return [];
+  }
+  return node.children.map((child) => child.text.trim()).filter(Boolean);
+}
+
+function findChildNode(node: ArkTSNode, type: string): ArkTSNode | undefined {
+  return node.children.find((child) => child.type === type);
+}
+
+function findPropertyNameFromCall(node: ArkTSNode): string | null {
+  const memberExpression = node.children.find((child) => child.type === "member_expression");
+  return memberExpression?.children.find((child) => child.type === "property_identifier")?.text ?? null;
 }
 
 function wrapNode(node: Parser.SyntaxNode, source: string, parent: ArkTSNode | null): ArkTSNode {
