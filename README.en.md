@@ -55,7 +55,39 @@ This is still an early scaffold focused on:
 - validating `opencode` integration against real HarmonyOS projects
 - keeping `README.md` and relevant `AGENTS.md` files updated when behavior or workflow changes
 
-## Quick Start
+## Installing from npm
+
+You can install `arkts-lsp` directly from npm without cloning the repository:
+
+### Global install
+
+```bash
+npm install -g @fe-essential/arkts-lsp
+```
+
+After installing, start the server with:
+
+```bash
+arkts-lsp --stdio
+```
+
+### Using npx (no install)
+
+```bash
+npx @fe-essential/arkts-lsp --stdio
+```
+
+### Install as a project dependency
+
+```bash
+npm install @fe-essential/arkts-lsp
+```
+
+Invoke via `node_modules/.bin/arkts-lsp --stdio`.
+
+## Quick Start (local development)
+
+To develop or run tests locally, clone the repository and run:
 
 ```bash
 npm install
@@ -150,7 +182,35 @@ Recommended rollout:
 2. Add project-level config in real ArkTS/HarmonyOS workspaces
 3. Disable the built-in TypeScript LSP per ArkTS project if you want `.ts` files handled by `arkts-lsp`
 
-A minimal global example:
+If you installed via `npm install -g @fe-essential/arkts-lsp`, use the `arkts-lsp` command directly:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "arkts-lsp": {
+      "command": ["arkts-lsp"],
+      "extensions": [".ets"]
+    }
+  }
+}
+```
+
+Or with npx (no global install needed):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "arkts-lsp": {
+      "command": ["npx", "@fe-essential/arkts-lsp"],
+      "extensions": [".ets"]
+    }
+  }
+}
+```
+
+If you're developing from source, use the local wrapper script:
 
 ```json
 {
@@ -174,7 +234,7 @@ A recommended project-level setup:
       "disabled": true
     },
     "arkts-lsp": {
-      "command": ["/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp"],
+      "command": ["arkts-lsp"],
       "extensions": [".ets", ".ts"]
     }
   }

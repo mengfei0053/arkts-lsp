@@ -59,7 +59,39 @@
 - 面向真实鸿蒙项目逐步验证 `opencode` 接入
 - 当行为或工作流发生变化时，及时同步更新 `README.md` 和相关 `AGENTS.md`
 
-## 快速开始
+## 从 npm 安装
+
+如果你只是想在项目中直接使用（不需要克隆源码），可以通过 npm 安装：
+
+### 全局安装
+
+```bash
+npm install -g @fe-essential/arkts-lsp
+```
+
+安装后可直接使用 `arkts-lsp` 命令启动服务：
+
+```bash
+arkts-lsp --stdio
+```
+
+### 使用 npx（免安装）
+
+```bash
+npx @fe-essential/arkts-lsp --stdio
+```
+
+### 作为项目依赖安装
+
+```bash
+npm install @fe-essential/arkts-lsp
+```
+
+安装后可通过 `node_modules/.bin/arkts-lsp --stdio` 调用。
+
+## 快速开始（本地开发）
+
+如果你要参与开发或运行测试，请克隆仓库后运行：
 
 ```bash
 npm install
@@ -161,7 +193,35 @@ npm run dev -- --stdio
 2. 在真正的 ArkTS/HarmonyOS 项目根目录下放置项目级 `opencode.json`
 3. 如果该项目里的 `.ts` 文件也希望由 `arkts-lsp` 接管，就在项目级配置中关闭 `typescript` 并把 `.ts` 加到 `extensions`
 
-一个最小可用的全局配置示例：
+如果你已经通过 `npm install -g @fe-essential/arkts-lsp` 安装，可以直接使用 `arkts-lsp` 命令：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "arkts-lsp": {
+      "command": ["arkts-lsp"],
+      "extensions": [".ets"]
+    }
+  }
+}
+```
+
+或者使用 npx（无需全局安装）：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "arkts-lsp": {
+      "command": ["npx", "@fe-essential/arkts-lsp"],
+      "extensions": [".ets"]
+    }
+  }
+}
+```
+
+如果你从源码开发，也可以用本地启动脚本：
 
 ```json
 {
@@ -185,7 +245,7 @@ npm run dev -- --stdio
       "disabled": true
     },
     "arkts-lsp": {
-      "command": ["/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp"],
+      "command": ["arkts-lsp"],
       "extensions": [".ets", ".ts"]
     }
   }
