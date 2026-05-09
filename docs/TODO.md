@@ -35,8 +35,8 @@
 | 能力 | 当前状态 | 目标状态 |
 |------|----------|----------|
 | **Definition** | 文本/符号匹配为主，已支持 `@Consume -> @Provide` 的基础跨文档配对跳转 | 基于 AST / 项目索引的跨模块精确跳转 |
-| **References** | 文本级搜索 + import/export 感知 | 真正的项目级引用图 |
-| **Rename** | 文本替换 + import/export 感知 | 带作用域分析与冲突检查的安全重命名 |
+| **References** | 已支持 `@Provide/@Consume` 的跨文档联动引用；其它场景仍以文本级搜索为主 | 真正的项目级引用图 |
+| **Rename** | 已支持 `@Provide/@Consume` 的跨文档联动重命名；其它场景仍以文本替换为主 | 带作用域分析与冲突检查的安全重命名 |
 | **Completion** | 正则 + 工作区索引 + 命名导入导出，已加入 `build()` 内 UI 组件上下文补全 | AST 感知、上下文敏感补全 |
 | **Diagnostics** | 已对 `any` 诊断引入 AST，减少文本误报 | ArkTS 专项诊断（类型错误、装饰器误用等） |
 | **Semantic Tokens** | 词法 + 正则分类 | 类型驱动的 token / modifier |
@@ -52,8 +52,8 @@
 ### ArkTS 专属能力
 - [ ] **Tree-sitter 运行时接管** —— 解析器适配层已完成，且已开始接入 `symbols.ts`、`navigation.ts`、`completion.ts`、`diagnostics.ts`，但仍未全面 AST 化
 - [x] **`@Builder` / `@BuilderParam`** —— 已完成基础 hover / completion / navigation
-- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover，且已支持 `@Consume -> @Provide` 的基础 definition 配对；引用/重命名/观察链仍未完成
-- [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用并为 `build()` 内补全提供上下文，但尚未构建真正的组件树模型
+- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover，且已支持 `@Consume -> @Provide` 的基础 definition 配对，以及 provider/consumer 双向 references / rename 联动；`@Observed/@ObjectLink` 观察链仍未完全建模
+- [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用、嵌套组件树，并给组件树节点附加源码 range；但尚未构建完整组件语义模型
 - [ ] **ArkTS 类型系统感知** —— 联合类型、可选链、类型守卫等尚未建模
 - [ ] **HarmonyOS API 面增强** —— 目前不是 SDK 驱动，也没有完整签名库
 - [x] **ETS 模块解析（最小版）** —— 已支持 `@kit.*` / `@ohos.*` 的最小解析

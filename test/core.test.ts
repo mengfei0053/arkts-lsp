@@ -236,6 +236,70 @@ describe("workspace navigation helpers", () => {
     ]);
   });
 
+  it("finds references for @Provide/@Consume linked state across documents", () => {
+    const provider = makeDocument(
+      "file:///provider.ets",
+      [
+        "struct Parent {",
+        "  @Provide sharedCount: number = 0;",
+        "  build() {}",
+        "}",
+      ].join("\n"),
+    );
+    const consumer = makeDocument(
+      "file:///consumer.ets",
+      [
+        "struct Child {",
+        "  @Consume sharedCount: number;",
+        "  build() {",
+        "    return this.sharedCount;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const references = findReferences([provider, consumer], provider, Position.create(1, 15));
+
+    expect(references).toHaveLength(3);
+    expect(references.map((location) => location.uri)).toEqual([
+      "file:///provider.ets",
+      "file:///consumer.ets",
+      "file:///consumer.ets",
+    ]);
+  });
+
+  it("finds the same linked state references when starting from the consumer side", () => {
+    const provider = makeDocument(
+      "file:///provider.ets",
+      [
+        "struct Parent {",
+        "  @Provide sharedCount: number = 0;",
+        "  build() {}",
+        "}",
+      ].join("\n"),
+    );
+    const consumer = makeDocument(
+      "file:///consumer.ets",
+      [
+        "struct Child {",
+        "  @Consume sharedCount: number;",
+        "  build() {",
+        "    return this.sharedCount;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const references = findReferences([provider, consumer], consumer, Position.create(3, 17));
+
+    expect(references).toHaveLength(3);
+    expect(references.map((location) => location.uri)).toEqual([
+      "file:///provider.ets",
+      "file:///consumer.ets",
+      "file:///consumer.ets",
+    ]);
+  });
+
   it("finds references for decorated ArkTS component fields without unrelated workspace matches", () => {
     const component = makeDocument(
       "file:///home.ets",
@@ -317,6 +381,64 @@ describe("workspace navigation helpers", () => {
     expect(edit).not.toBeNull();
     expect(edit?.changes?.["file:///home.ets"]).toHaveLength(3);
     expect(edit?.changes?.["file:///helper.ts"]).toBeUndefined();
+  });
+
+  it("renames @Provide/@Consume linked state across documents", () => {
+    const provider = makeDocument(
+      "file:///provider.ets",
+      [
+        "struct Parent {",
+        "  @Provide sharedCount: number = 0;",
+        "  build() {}",
+        "}",
+      ].join("\n"),
+    );
+    const consumer = makeDocument(
+      "file:///consumer.ets",
+      [
+        "struct Child {",
+        "  @Consume sharedCount: number;",
+        "  build() {",
+        "    return this.sharedCount;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const edit = buildRenameEdit([provider, consumer], provider, Position.create(1, 15), "totalCount");
+
+    expect(edit).not.toBeNull();
+    expect(edit?.changes?.["file:///provider.ets"]).toHaveLength(1);
+    expect(edit?.changes?.["file:///consumer.ets"]).toHaveLength(2);
+  });
+
+  it("renames linked @Provide/@Consume state when rename starts from the consumer side", () => {
+    const provider = makeDocument(
+      "file:///provider.ets",
+      [
+        "struct Parent {",
+        "  @Provide sharedCount: number = 0;",
+        "  build() {}",
+        "}",
+      ].join("\n"),
+    );
+    const consumer = makeDocument(
+      "file:///consumer.ets",
+      [
+        "struct Child {",
+        "  @Consume sharedCount: number;",
+        "  build() {",
+        "    return this.sharedCount;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const edit = buildRenameEdit([provider, consumer], consumer, Position.create(3, 17), "totalCount");
+
+    expect(edit).not.toBeNull();
+    expect(edit?.changes?.["file:///provider.ets"]).toHaveLength(1);
+    expect(edit?.changes?.["file:///consumer.ets"]).toHaveLength(2);
   });
 
   it("renames an exported symbol across import bindings and same-name usages", () => {

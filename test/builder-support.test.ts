@@ -179,6 +179,32 @@ describe("@Provide / @Consume decoration awareness", () => {
     const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
     expect(contents).toContain("ObjectLink");
     expect(contents).toContain("Observed");
+    expect(contents).toContain("DataModel");
+  });
+
+  it("describes an observed object chain for object links", () => {
+    const document = makeDocument(
+      "file:///link.ets",
+      [
+        "@Observed",
+        "class FormState {",
+        "  value: number = 0;",
+        "}",
+        "struct Viewer {",
+        "  @ObjectLink form: FormState;",
+        "  build() {",
+        "    return this.form.value;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const hover = buildHover(document, Position.create(5, 15));
+    expect(hover).not.toBeNull();
+    const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
+    expect(contents).toContain("Observed");
+    expect(contents).toContain("FormState");
+    expect(contents).toContain("reactive");
   });
 });
 

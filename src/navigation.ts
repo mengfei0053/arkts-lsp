@@ -60,6 +60,16 @@ export function findReferencesWithOptions(
 ): Location[] {
   const member = findDocumentMemberSymbolAtPosition(document, position);
   if (member) {
+    if (member.decorator === "Provide" || member.decorator === "Consume") {
+      const linkedMembers = documents.flatMap((candidate) => collectAllTypeMemberSymbols(candidate))
+        .filter((candidate) => candidate.name === member.name)
+        .filter((candidate) => candidate.decorator === "Provide" || candidate.decorator === "Consume");
+      const references = dedupeLocations(
+        linkedMembers.flatMap((candidate) => collectScopedWordLocationsByMember(documents, candidate)),
+      );
+      return includeDeclaration ? references : references.filter((location) => locationKey(location) !== locationKey(member.location));
+    }
+
     const references = collectScopedWordLocations(document, member.name, member.scopeRange);
     return includeDeclaration ? references : references.filter((location) => locationKey(location) !== locationKey(member.location));
   }
@@ -142,6 +152,16 @@ export function buildRenameEdit(
     }
 
     const changes: Record<string, TextEdit[]> = {};
+    if (member.decorator === "Provide" || member.decorator === "Consume") {
+      const linkedMembers = documents.flatMap((candidate) => collectAllTypeMemberSymbols(candidate))
+        .filter((candidate) => candidate.name === member.name)
+        .filter((candidate) => candidate.decorator === "Provide" || candidate.decorator === "Consume");
+      for (const linkedMember of linkedMembers) {
+        addEdits(changes, linkedMember.location.uri, collectScopedWordLocationsByMember(documents, linkedMember), trimmedName);
+      }
+      return Object.keys(changes).length > 0 ? { changes: dedupeTextEdits(changes) } : null;
+    }
+
     addEdits(changes, document.uri, collectScopedWordLocations(document, member.name, member.scopeRange), trimmedName);
     return Object.keys(changes).length > 0 ? { changes: dedupeTextEdits(changes) } : null;
   }
@@ -285,6 +305,21 @@ function collectScopedWordLocations(
   scopeRange: { start: Position; end: Position },
 ): Location[] {
   return collectWordLocations(document, word).filter((location) => isPositionWithinRange(location.range.start, scopeRange));
+}
+
+function collectScopedWordLocationsByMember(
+  documents: TextDocument[],
+  member: {
+    name: string;
+    location: Location;
+    scopeRange: { start: Position; end: Position };
+  },
+): Location[] {
+  const document = documents.find((candidate) => candidate.uri === member.location.uri);
+  if (!document) {
+    return [member.location];
+  }
+  return collectScopedWordLocations(document, member.name, member.scopeRange);
 }
 
 function dedupeLocations(locations: Location[]): Location[] {

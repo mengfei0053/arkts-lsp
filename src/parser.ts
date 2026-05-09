@@ -72,6 +72,15 @@ export type BuildMethodComponentCall = {
   node: ArkTSNode;
 };
 
+export type BuildMethodComponentTreeNode = {
+  name: string;
+  range: {
+    start: ArkTSPoint;
+    end: ArkTSPoint;
+  };
+  children: BuildMethodComponentTreeNode[];
+};
+
 const parser = new Parser();
 parser.setLanguage(ArkTSModule.ArkTS);
 
@@ -254,15 +263,7 @@ export function getTopLevelDeclarations(tree: ArkTSTree): TopLevelDeclarationGro
 }
 
 export function getBuildMethodComponentCalls(tree: ArkTSTree, structName: string): string[] {
-  const struct = getStructDeclarations(tree).find((item) => item.name === structName);
-  if (!struct) {
-    return [];
-  }
-
-  const classBody = struct.node.children.find((child) => child.type === "class_body");
-  const buildMethod = classBody?.children.find(
-    (child) => child.type === "method_definition" && findChildText(child, "property_identifier") === "build",
-  );
+  const buildMethod = findBuildMethodNode(tree, structName);
   if (!buildMethod) {
     return [];
   }
@@ -279,6 +280,71 @@ export function getBuildMethodComponentCalls(tree: ArkTSTree, structName: string
   }
 
   return calls;
+}
+
+export function getBuildMethodComponentTree(tree: ArkTSTree, structName: string): BuildMethodComponentTreeNode[] {
+  const buildMethod = findBuildMethodNode(tree, structName);
+  if (!buildMethod) {
+    return [];
+  }
+
+  const statementBlock = buildMethod.children.find((child) => child.type === "statement_block");
+  if (!statementBlock) {
+    return [];
+  }
+
+  return buildComponentTreeFromNode(statementBlock);
+}
+
+function findBuildMethodNode(tree: ArkTSTree, structName: string): ArkTSNode | null {
+  const struct = getStructDeclarations(tree).find((item) => item.name === structName);
+  if (!struct) {
+    return null;
+  }
+
+  const classBody = struct.node.children.find((child) => child.type === "class_body");
+  return classBody?.children.find(
+    (child) => child.type === "method_definition" && findChildText(child, "property_identifier") === "build",
+  ) ?? null;
+}
+
+function buildComponentTreeFromNode(node: ArkTSNode): BuildMethodComponentTreeNode[] {
+  const result: BuildMethodComponentTreeNode[] = [];
+  for (const child of node.children) {
+    if (child.type === "component_statement") {
+      const name = findChildText(child, "identifier");
+      if (!name || !startsWithUppercase(name)) {
+        continue;
+      }
+      const block = child.children.find((entry) => entry.type === "statement_block");
+      result.push({
+        name,
+        range: {
+          start: child.startPosition,
+          end: child.endPosition,
+        },
+        children: block ? buildComponentTreeFromNode(block) : [],
+      });
+      continue;
+    }
+
+    if (child.type === "expression_statement") {
+      const call = child.children.find((entry) => entry.type === "call_expression");
+      const name = call ? findFirstCallName(call) : null;
+      if (name && startsWithUppercase(name)) {
+        result.push({
+          name,
+          range: {
+            start: call?.startPosition ?? child.startPosition,
+            end: call?.endPosition ?? child.endPosition,
+          },
+          children: [],
+        });
+      }
+      continue;
+    }
+  }
+  return result;
 }
 
 function wrapNode(node: Parser.SyntaxNode, source: string, parent: ArkTSNode | null): ArkTSNode {

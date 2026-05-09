@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { parseArkTS, ArkTSNode, findNodesByType, getDecoratorNames, getStructDeclarations, getBuilderFunctions, getBuilderParamFields, getClassBodyMembers, getTopLevelDeclarations, getBuildMethodComponentCalls } from "../src/parser.js";
+import { parseArkTS, ArkTSNode, findNodesByType, getDecoratorNames, getStructDeclarations, getBuilderFunctions, getBuilderParamFields, getClassBodyMembers, getTopLevelDeclarations, getBuildMethodComponentCalls, getBuildMethodComponentTree } from "../src/parser.js";
 
 function makeDocument(uri: string, text: string): TextDocument {
   return TextDocument.create(uri, "arkts", 1, text);
@@ -443,5 +443,97 @@ describe("parser edge cases", () => {
     const calls = getBuildMethodComponentCalls(tree, "ComplexPage");
 
     expect(calls).toEqual(["Column", "Text", "ForEach"]);
+  });
+
+  it("extracts a nested UI component tree from build() methods", () => {
+    const document = makeDocument(
+      "file:///complex.ets",
+      [
+        "@Component",
+        "struct ComplexPage {",
+        "  build() {",
+        "    Column() {",
+        "      Text('hello');",
+        "      Row() {",
+        "        Button('ok');",
+        "      }",
+        "    }",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const tree = parseArkTS(document)!;
+    const componentTree = getBuildMethodComponentTree(tree, "ComplexPage");
+
+    expect(componentTree).toEqual([
+      {
+        name: "Column",
+        range: {
+          start: { line: 3, character: 4 },
+          end: { line: 8, character: 5 },
+        },
+        children: [
+          {
+            name: "Text",
+            range: {
+              start: { line: 4, character: 6 },
+              end: { line: 4, character: 19 },
+            },
+            children: [],
+          },
+          {
+            name: "Row",
+            range: {
+              start: { line: 5, character: 6 },
+              end: { line: 7, character: 7 },
+            },
+            children: [
+              {
+                name: "Button",
+                range: {
+                  start: { line: 6, character: 8 },
+                  end: { line: 6, character: 20 },
+                },
+                children: [],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("includes source ranges on build() component tree nodes", () => {
+    const document = makeDocument(
+      "file:///complex.ets",
+      [
+        "@Component",
+        "struct ComplexPage {",
+        "  build() {",
+        "    Column() {",
+        "      Text('hello');",
+        "    }",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const tree = parseArkTS(document)!;
+    const componentTree = getBuildMethodComponentTree(tree, "ComplexPage");
+
+    expect(componentTree[0]).toMatchObject({
+      name: "Column",
+      range: {
+        start: { line: 3, character: 4 },
+        end: { line: 5, character: 5 },
+      },
+    });
+    expect(componentTree[0]?.children[0]).toMatchObject({
+      name: "Text",
+      range: {
+        start: { line: 4, character: 6 },
+      },
+    });
   });
 });

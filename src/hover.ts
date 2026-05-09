@@ -254,7 +254,7 @@ function findObservedClassHint(document: TextDocument, declarationText: string):
 
   const decorators = getDecoratorsForNamedTopLevelDeclaration(document, typeName);
   return decorators.includes("Observed")
-    ? `This field links to an **Observed** object: \`${typeName}\`.`
+    ? `This field links to an **Observed** object: \`${typeName}\`, enabling **reactive** updates.`
     : null;
 }
 
