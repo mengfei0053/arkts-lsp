@@ -1,4 +1,8 @@
 node_modules/
 dist/
 .DS_Store
-docs/
+docs/assets/
+docs/media/
+docs/*.html
+docs/.nojekyll
+docs/plans/

@@ -137,29 +137,6 @@ npm run dev -- --stdio
 - 项目文件扫描与项目级上下文加载
 - 相对 import 路径 DocumentLink 生成
 
-## 最终目标
-
-这个项目的最终目标是：
-
-1. 把 `arkts-lsp` 做成一个稳定可启动的标准 LSP 服务
-2. 让它具备 ArkTS/HarmonyOS 工程级别的项目感知能力
-3. 将其接入 `opencode`
-4. 让 `opencode` 在编写 ArkTS 代码时，能够稳定使用 LSP 能力
-
-理想状态下，`opencode` 可以在打开 ArkTS 文件时自动启动 `arkts-lsp`，并获得这些能力：
-
-- `hover`
-- `definition`
-- `references`
-- `rename`
-- `completion`
-- `inlayHint`
-- `codeAction`
-- `semanticTokens`
-- `diagnostics`
-- `foldingRange`
-- `selectionRange`
-
 ## 后续路线
 
 接下来的主线工作会集中在：

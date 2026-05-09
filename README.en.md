@@ -133,24 +133,6 @@ Current tests cover the core behaviors that are easiest to regress while the ser
 - project file scanning and project-context loading
 - document-link generation for relative import specifiers
 
-## End Goal
-
-The end goal is to make `arkts-lsp` usable from `opencode`, so that ArkTS files can benefit from standard LSP features during code generation and editing.
-
-In the target setup, `opencode` should be able to launch `arkts-lsp` automatically for ArkTS files and use:
-
-- `hover`
-- `definition`
-- `references`
-- `rename`
-- `completion`
-- `inlayHint`
-- `codeAction`
-- `semanticTokens`
-- `diagnostics`
-- `foldingRange`
-- `selectionRange`
-
 ## Roadmap
 
 The next major milestones are:
