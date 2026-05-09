@@ -1,5 +1,6 @@
 import { Diagnostic, DiagnosticSeverity } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { findNodesByType, parseArkTS } from "./parser.js";
 import { ServerSettings } from "./types.js";
 
 export function collectDiagnostics(textDocument: TextDocument, settings: ServerSettings): Diagnostic[] {
@@ -21,14 +22,22 @@ export function collectDiagnostics(textDocument: TextDocument, settings: ServerS
         source: "arkts-lsp",
       });
     }
+  }
 
-    const anyIndex = line.indexOf(": any");
-    if (anyIndex >= 0 && diagnostics.length < settings.maxNumberOfProblems) {
+  const tree = parseArkTS(textDocument);
+  if (tree) {
+    for (const node of findNodesByType(tree, "predefined_type")) {
+      if (diagnostics.length >= settings.maxNumberOfProblems) {
+        break;
+      }
+      if (node.text !== "any" || node.parent?.type !== "type_annotation") {
+        continue;
+      }
       diagnostics.push({
         severity: DiagnosticSeverity.Warning,
         range: {
-          start: { line: index, character: anyIndex + 2 },
-          end: { line: index, character: anyIndex + 5 },
+          start: node.startPosition,
+          end: node.endPosition,
         },
         message: "Avoid `any` where possible. Prefer a concrete ArkTS-friendly type.",
         source: "arkts-lsp",

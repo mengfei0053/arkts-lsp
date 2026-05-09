@@ -8,6 +8,7 @@ export type ServerSettings = {
 export type DefinitionContext = {
   document: TextDocument;
   symbols: SymbolInformation[];
+  documents?: TextDocument[];
 };
 
 export type LinkedReferenceTarget = {

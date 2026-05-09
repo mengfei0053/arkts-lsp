@@ -66,6 +66,12 @@ export type TopLevelDeclarationGroups = {
   imports: ImportInfo[];
 };
 
+export type BuildMethodComponentCall = {
+  name: string;
+  line: number;
+  node: ArkTSNode;
+};
+
 const parser = new Parser();
 parser.setLanguage(ArkTSModule.ArkTS);
 
@@ -247,6 +253,34 @@ export function getTopLevelDeclarations(tree: ArkTSTree): TopLevelDeclarationGro
   return groups;
 }
 
+export function getBuildMethodComponentCalls(tree: ArkTSTree, structName: string): string[] {
+  const struct = getStructDeclarations(tree).find((item) => item.name === structName);
+  if (!struct) {
+    return [];
+  }
+
+  const classBody = struct.node.children.find((child) => child.type === "class_body");
+  const buildMethod = classBody?.children.find(
+    (child) => child.type === "method_definition" && findChildText(child, "property_identifier") === "build",
+  );
+  if (!buildMethod) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const calls: string[] = [];
+  for (const node of findNodes(buildMethod, (candidate) => candidate.type === "component_statement" || candidate.type === "call_expression")) {
+    const name = findFirstCallName(node);
+    if (!name || seen.has(name) || !startsWithUppercase(name)) {
+      continue;
+    }
+    seen.add(name);
+    calls.push(name);
+  }
+
+  return calls;
+}
+
 function wrapNode(node: Parser.SyntaxNode, source: string, parent: ArkTSNode | null): ArkTSNode {
   const wrapped: ArkTSNode = {
     type: node.type,
@@ -296,6 +330,20 @@ function findAncestorName(node: ArkTSNode, ancestorType: string, nameChildType: 
     current = current.parent;
   }
   return undefined;
+}
+
+function findFirstCallName(node: ArkTSNode): string | null {
+  if (node.type === "component_statement") {
+    return findChildText(node, "identifier");
+  }
+  if (node.type === "call_expression") {
+    return findChildText(node, "identifier");
+  }
+  return null;
+}
+
+function startsWithUppercase(value: string): boolean {
+  return /^[A-Z]/u.test(value);
 }
 
 function isExportedNode(node: ArkTSNode): boolean {

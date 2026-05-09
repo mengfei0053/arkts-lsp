@@ -1,85 +1,104 @@
-# TODO — ArkTS LSP Roadmap
+# TODO —— ArkTS LSP 路线图
 
-> This file tracks the gap between the current MVP and the final goal: a stable, project-aware ArkTS LSP that `opencode` can launch automatically for real HarmonyOS projects.
+> 本文件用于跟踪当前 MVP 与最终目标之间的差距：把 `arkts-lsp` 逐步演进成一个稳定、面向真实 HarmonyOS 工程、可被 `opencode` 自动拉起的项目级 ArkTS LSP。
 
-## ✅ Already Implemented
+## ✅ 已实现
 
-These capabilities are working and covered by tests:
+以下能力已经可用，并且已有测试覆盖：
 
-- **Text synchronization**: incremental `didOpen` / `didChange` / `didClose`
-- **Diagnostics**: TODO and `any` markers
-- **Hover**: basic symbol info + import/export-aware descriptions + decorator-aware `@Builder` hover
-- **Symbol extraction**: regex-based ArkTS/TypeScript declaration parsing
-- **Tree-sitter parser adapter**: `src/parser.ts` with AST-backed helpers for structs, decorators, builder functions, builder params, members, imports, and top-level declarations
-- **Document & workspace symbols**: filtering and search
-- **Definition**: symbol-name based + import/export-aware + relative import path jumps
-- **References**: import/export-aware lookup
-- **Rename**: workspace edit generation
-- **Completion**: keywords, workspace symbols, named-import exports, `this.` instance members, imported class static members
-- **Signature help**: imported functions and class methods
-- **Inlay hints**: parameter names for local functions and imported aliases
-- **Code actions**: quick fixes for TODO / `any` diagnostics
-- **Semantic tokens**: keywords, types, functions, variables, decorators, properties
-- **Import path resolution**: relative path completion + DocumentLink (clickable)
-- **HarmonyOS module resolution (minimal)**: `resolveModuleSpecifier()` for relative imports, `@kit.*`, and `@ohos.*` with built-in virtual-module metadata
-- **Document highlight**: exact-word identifier highlighting
-- **Folding range**: multi-line brace blocks
-- **Selection range**: identifiers, statements, brace blocks
-- **Project context**: root detection, `.ets`/`.ts` scanning, project-level loading
-- **opencode integration**: global/project config examples + launcher script
+- **文本同步**：支持 `didOpen` / `didChange` / `didClose` 的增量同步
+- **基础诊断**：识别 `TODO` 与基于 AST 的 `any` 用法，避免误报注释中的 `: any`
+- **悬停信息**：基础符号信息、import/export 感知悬停、`@Builder` 装饰器悬停，以及 `@Provide/@Consume/@ObjectLink/@Observed` 的增强语义提示
+- **符号提取**：顶层声明与成员提取已开始接入 parser，支持同一行多个顶层声明与单行 struct/class body
+- **Tree-sitter 解析适配层**：新增 `src/parser.ts`，提供 struct、decorator、builder、成员、import、顶层声明等 AST 帮助函数
+- **文档符号 / 工作区符号**：基础过滤与查询
+- **定义跳转**：基于符号名、import/export 关联、相对路径 import 跳转
+- **引用查找**：支持 import/export 关联引用
+- **重命名**：生成工作区编辑结果
+- **补全**：关键字、工作区符号、命名导入导出、`this.` 实例成员、导入类的静态成员
+- **签名帮助**：导入函数与类方法的签名提示
+- **Inlay Hints**：本地函数与导入别名的参数名提示
+- **Code Actions**：针对 `TODO` / `any` 诊断的快速修复
+- **语义高亮**：关键字、类型、函数、变量、装饰器、属性
+- **导入路径能力**：相对路径补全 + `DocumentLink` 点击跳转
+- **HarmonyOS 模块解析（最小版）**：`resolveModuleSpecifier()` 已支持相对路径、`@kit.*`、`@ohos.*`，并返回内置虚拟模块元数据
+- **文档高亮**：当前文档内同名标识符高亮
+- **折叠范围**：多行大括号代码块折叠
+- **选择范围**：标识符、语句、代码块的层级选择
+- **项目上下文**：工程根识别、`.ets` / `.ts` 扫描、项目级文档加载
+- **opencode 集成**：全局 / 项目配置示例与启动脚本
 
-## 🟡 Partially Implemented / Needs Improvement
+## 🟡 部分完成 / 仍需增强
 
-These exist at a text-heuristic level and should be upgraded to project-aware behavior:
+以下能力已经有基础，但仍主要停留在轻量文本启发式或最小实现阶段，需要继续升级为项目级语义能力：
 
-| Area | Current State | Target State |
-|------|--------------|--------------|
-| **Definition** | Regex + symbol-name matching; handles relative imports | AST/project-level resolution, cross-module navigation |
-| **References** | Text-level search with import/export awareness | True reference graph across the project |
-| **Rename** | Text replacement with import/export awareness | Safe rename with scope analysis, collision detection |
-| **Completion** | Regex + workspace index + named-import exports | AST-aware completion, context-sensitive suggestions |
-| **Diagnostics** | Simple TODO / `any` pattern matching | ArkTS-specific linting (type errors, decorator misuse, etc.) |
-| **Semantic tokens** | Token + regex-based classification | Type-checker driven token types and modifiers |
-| **Hover** | Symbol info from extracted declarations plus `@Builder` decorator awareness | Type signatures, JSDoc, richer decorator metadata |
-| **Inlay hints** | Local function parameters | Type inference hints, implicit return types, chained call params |
-| **Parser rollout** | AST helper layer exists in `src/parser.ts`, but runtime symbol/navigation flows still mostly use regex/text heuristics | Parser-backed symbol model used across hover, diagnostics, symbols, navigation, and completion |
-| **HarmonyOS API knowledge** | Minimal built-in metadata for `@kit.*` / `@ohos.*` and virtual module docs | SDK-backed signatures, richer completion, hover, and navigation |
+| 能力 | 当前状态 | 目标状态 |
+|------|----------|----------|
+| **Definition** | 文本/符号匹配为主，已支持 `@Consume -> @Provide` 的基础跨文档配对跳转 | 基于 AST / 项目索引的跨模块精确跳转 |
+| **References** | 文本级搜索 + import/export 感知 | 真正的项目级引用图 |
+| **Rename** | 文本替换 + import/export 感知 | 带作用域分析与冲突检查的安全重命名 |
+| **Completion** | 正则 + 工作区索引 + 命名导入导出，已加入 `build()` 内 UI 组件上下文补全 | AST 感知、上下文敏感补全 |
+| **Diagnostics** | 已对 `any` 诊断引入 AST，减少文本误报 | ArkTS 专项诊断（类型错误、装饰器误用等） |
+| **Semantic Tokens** | 词法 + 正则分类 | 类型驱动的 token / modifier |
+| **Hover** | 基于声明文本的悬停，已加入 `@Builder`、`@Provide/@Consume/@ObjectLink/@Observed` 的增强语义 | 类型签名、JSDoc、更丰富的装饰器元数据 |
+| **Inlay Hints** | 仅参数名提示 | 类型推断、隐式返回类型、链式调用参数提示 |
+| **解析器落地范围** | `src/parser.ts` 已存在，且已接入 `symbols` / `diagnostics` / `completion` / 部分 `navigation`，但还未覆盖全部运行时路径 | parser 驱动 `symbols` / `navigation` / `completion` / `diagnostics` |
+| **HarmonyOS API 感知** | 仅内置少量 `@kit.*` / `@ohos.*` 元数据与虚拟模块 | 基于 SDK / 更完整签名的补全、悬停、跳转 |
 
-## 🔴 Not Yet Implemented
+## 🔴 未完成 / 未开始
 
-These are still incomplete or not started:
+以下能力仍未完成，或只做了非常早期的占位：
 
-### ArkTS-Specific Features
-- [ ] **Tree-sitter parser rollout into runtime** — current parser adapter exists, but `symbols.ts`, `navigation.ts`, `completion.ts`, and `diagnostics.ts` are not yet broadly AST-driven
-- [x] **`@Builder` / `@BuilderParam` support** — hover, completion, navigation for builder functions
-- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` decorators** — state management field semantics beyond simple decorator display
-- [ ] **`build()` method analysis** — UI component tree awareness
-- [ ] **ArkTS type system awareness** — union types, optional chaining, type guards
-- [ ] **HarmonyOS API surface knowledge** — current built-in metadata is minimal and not SDK-backed
-- [x] **ETS module resolution** — minimal `@kit.*` / `@ohos.*` resolution via `resolveModuleSpecifier()` and virtual module documents
+### ArkTS 专属能力
+- [ ] **Tree-sitter 运行时接管** —— 解析器适配层已完成，且已开始接入 `symbols.ts`、`navigation.ts`、`completion.ts`、`diagnostics.ts`，但仍未全面 AST 化
+- [x] **`@Builder` / `@BuilderParam`** —— 已完成基础 hover / completion / navigation
+- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover，且已支持 `@Consume -> @Provide` 的基础 definition 配对；引用/重命名/观察链仍未完成
+- [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用并为 `build()` 内补全提供上下文，但尚未构建真正的组件树模型
+- [ ] **ArkTS 类型系统感知** —— 联合类型、可选链、类型守卫等尚未建模
+- [ ] **HarmonyOS API 面增强** —— 目前不是 SDK 驱动，也没有完整签名库
+- [x] **ETS 模块解析（最小版）** —— 已支持 `@kit.*` / `@ohos.*` 的最小解析
 
-### LSP Protocol Extensions
-- [ ] **Document symbols with hierarchy** — tree-structured outline view (current: flat list)
-- [ ] **Call hierarchy** — `callHierarchy/prepare` and `callHierarchy/incomingCalls` / `outgoingCalls`
-- [ ] **Type hierarchy** — `typeHierarchy/prepare` and subtype/supertype navigation
-- [ ] **Code lens** — run/debug actions, test counts, decorator metadata
-- [ ] **Inlay hints (expanded)** — implicit type annotations, chain expression parameter names
-- [ ] **Linked editing ranges** — paired tag/attribute editing for ArkTS UI syntax
-- [ ] **Moniker** — cross-reference symbol identity for indexing services
+### LSP 协议扩展
+- [ ] **分层 Document Symbols** —— 当前仍是扁平列表
+- [ ] **Call Hierarchy**
+- [ ] **Type Hierarchy**
+- [ ] **Code Lens**
+- [ ] **扩展 Inlay Hints** —— 类型推断、链式调用参数等
+- [ ] **Linked Editing Ranges**
+- [ ] **Moniker**
 
-### Project & Tooling
-- [ ] **Incremental parsing** — avoid full re-parse on every `didChange`
-- [ ] **Watch service** — file system watcher for cross-file updates
-- [ ] **Configuration support** — `workspace/configuration` for user-tunable settings
-- [ ] **Progress reporting** — `$/progress` for long operations (initial scan, re-index)
-- [ ] **Real-project integration tests** — fixture from an actual HarmonyOS app, end-to-end LSP protocol tests
-- [ ] **Performance benchmarks** — measure startup time, memory usage, response latency on large projects
+### 工程与工具能力
+- [ ] **增量解析缓存** —— 避免每次 `didChange` 触发全量重算
+- [ ] **文件监听服务** —— 跨文件变化自动刷新项目上下文
+- [ ] **Workspace 配置支持** —— `workspace/configuration` 与 feature flags
+- [ ] **进度上报** —— `$/progress` 用于初始扫描与重建索引
+- [ ] **真实项目集成测试** —— 基于真实 HarmonyOS 工程 fixture 的端到端验证
+- [ ] **性能基准** —— 启动时间、内存、响应延迟、大项目表现
 
-## 🎯 Final Goal
+## 🎯 最终目标
 
-When complete, `opencode` (or any LSP client) should be able to:
+最终希望 `arkts-lsp` 能做到：
 
-1. Launch `arkts-lsp` automatically for `.ets` files
-2. Provide project-aware navigation, completion, and diagnostics
-3. Understand ArkTS/HarmonyOS project structure, decorators, and API surface
-4. Enable AI code generation tools to use LSP context for better ArkTS code
+1. 对真实 `.ets` / HarmonyOS 项目自动拉起
+2. 提供项目级定义跳转、补全、引用、诊断、重命名
+3. 理解 ArkTS / HarmonyOS 的装饰器、组件结构、模块体系、API Surface
+4. 为 AI 编码工具提供更可靠的 ArkTS 语言上下文
+
+## 📌 下一步建议优先级
+
+### P0（当前最值得继续推进）
+1. **解析器主链接管**：先把 `symbols.ts` / `diagnostics.ts` / `completion.ts` 的关键路径切到 parser
+2. **状态管理装饰器语义**：补 `@Provide/@Consume` 配对定义、`@Observed/@ObjectLink` 观察链展示
+3. **`build()` 方法分析**：识别组件 `build()`，提取 UI 组件调用上下文，支撑更真实的补全
+
+### P1
+4. **增量解析 + watcher**
+5. **workspace/configuration + feature flags**
+6. **HarmonyOS API 感知增强（SDK / 更完整签名）**
+
+### P2
+7. **分层符号 / 调用层级 / 类型层级**
+8. **Code Lens / 扩展 Inlay Hints / Linked Editing**
+
+### P3
+9. **真实项目集成测试 / 性能基准 / 进度上报 / Moniker**

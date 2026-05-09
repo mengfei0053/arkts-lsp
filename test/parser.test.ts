@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { parseArkTS, ArkTSNode, findNodesByType, getDecoratorNames, getStructDeclarations, getBuilderFunctions, getBuilderParamFields, getClassBodyMembers, getTopLevelDeclarations } from "../src/parser.js";
+import { parseArkTS, ArkTSNode, findNodesByType, getDecoratorNames, getStructDeclarations, getBuilderFunctions, getBuilderParamFields, getClassBodyMembers, getTopLevelDeclarations, getBuildMethodComponentCalls } from "../src/parser.js";
 
 function makeDocument(uri: string, text: string): TextDocument {
   return TextDocument.create(uri, "arkts", 1, text);
@@ -419,5 +419,29 @@ describe("parser edge cases", () => {
     const structs = getStructDeclarations(tree);
     expect(structs).toHaveLength(1);
     expect(structs[0].decorators).toContain("Component");
+  });
+
+  it("extracts UI component calls from build() methods", () => {
+    const document = makeDocument(
+      "file:///complex.ets",
+      [
+        "@Component",
+        "struct ComplexPage {",
+        "  build() {",
+        "    Column() {",
+        "      Text('hello');",
+        "      ForEach(this.items, (item) => {",
+        "        this.renderItem(item);",
+        "      });",
+        "    }",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const tree = parseArkTS(document)!;
+    const calls = getBuildMethodComponentCalls(tree, "ComplexPage");
+
+    expect(calls).toEqual(["Column", "Text", "ForEach"]);
   });
 });

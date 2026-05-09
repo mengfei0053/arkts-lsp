@@ -1,5 +1,6 @@
 import { CompletionItem, CompletionItemKind } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { findNodesByType, parseArkTS } from "./parser.js";
 import {
   collectDocumentSymbols,
   collectExportedSymbolLocations,
@@ -54,6 +55,14 @@ export function buildCompletionItems(documents: TextDocument[], document: TextDo
       });
       seen.add(keyword);
     }
+  }
+
+  for (const item of buildArkTSBuildContextCompletionItems(document, position, prefix)) {
+    if (seen.has(item.label)) {
+      continue;
+    }
+    items.push(item);
+    seen.add(item.label);
   }
 
   for (const symbol of documents.flatMap((candidate) => collectDocumentSymbols(candidate))) {
@@ -151,4 +160,54 @@ function collectClassMembers(
       kind: mapTypeMemberKindToCompletionKind(member.kind),
       detail: member.decorator ? `@${member.decorator} field of ${className}` : `Member of ${className}`,
     }));
+}
+
+function buildArkTSBuildContextCompletionItems(
+  document: TextDocument,
+  position: { line: number; character: number },
+  prefix: string,
+): CompletionItem[] {
+  if (!isInsideBuildMethod(document, position)) {
+    return [];
+  }
+
+  return ["Text", "Row", "Column", "Button", "Image", "List", "ForEach"]
+    .filter((label) => !prefix || label.toLowerCase().startsWith(prefix))
+    .map((label) => ({
+      label,
+      kind: CompletionItemKind.Class,
+      detail: "ArkTS UI component",
+      insertText: label,
+    }));
+}
+
+function isInsideBuildMethod(document: TextDocument, position: { line: number; character: number }): boolean {
+  const tree = parseArkTS(document);
+  if (!tree) {
+    return false;
+  }
+
+  return findNodesByType(tree, "method_definition").some((node) => {
+    const name = node.children.find((child) => child.type === "property_identifier")?.text;
+    if (name !== "build") {
+      return false;
+    }
+    return isWithinNode(position, node);
+  });
+}
+
+function isWithinNode(
+  position: { line: number; character: number },
+  node: { startPosition: { line: number; character: number }; endPosition: { line: number; character: number } },
+): boolean {
+  if (position.line < node.startPosition.line || position.line > node.endPosition.line) {
+    return false;
+  }
+  if (position.line === node.startPosition.line && position.character < node.startPosition.character) {
+    return false;
+  }
+  if (position.line === node.endPosition.line && position.character > node.endPosition.character) {
+    return false;
+  }
+  return true;
 }

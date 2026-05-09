@@ -151,6 +151,7 @@ connection.onDefinition(({ textDocument, position }) => {
 
   return findDefinitions({
     document,
+    documents: project.documents,
     symbols: project.documents.flatMap((candidate) => collectDocumentSymbols(candidate)),
   }, position);
 });

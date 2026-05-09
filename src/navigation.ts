@@ -8,7 +8,7 @@ import {
   WorkspaceEdit,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { collectDocumentSymbols, collectExportedSymbolLocations, findDocumentMemberSymbolAtPosition } from "./symbols.js";
+import { collectAllTypeMemberSymbols, collectDocumentSymbols, collectExportedSymbolLocations, findDocumentMemberSymbolAtPosition } from "./symbols.js";
 import {
   collectImportContexts,
   collectImportBindings,
@@ -20,9 +20,19 @@ import {
 } from "./text.js";
 import { DefinitionContext, ImportBinding, LinkedReferenceTarget } from "./types.js";
 
-export function findDefinitions({ document, symbols }: DefinitionContext, position: Position): Location[] {
+export function findDefinitions({ document, symbols, documents }: DefinitionContext, position: Position): Location[] {
   const member = findDocumentMemberSymbolAtPosition(document, position);
   if (member) {
+    if (member.decorator === "Consume" && documents) {
+      const providerDefinitions = documents
+        .filter((candidate) => candidate.uri !== document.uri)
+        .flatMap((candidate) => collectAllTypeMemberSymbols(candidate))
+        .filter((candidate) => candidate.name === member.name && candidate.decorator === "Provide")
+        .map((candidate) => candidate.location);
+      if (providerDefinitions.length > 0) {
+        return providerDefinitions;
+      }
+    }
     return [member.location];
   }
 

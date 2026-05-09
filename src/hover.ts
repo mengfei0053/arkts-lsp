@@ -8,7 +8,7 @@ import { collectDocumentSymbols, displayDocumentName, findDocumentMemberSymbolAt
 export function buildHover(document: TextDocument, position: Position): Hover | null {
   const member = findDocumentMemberSymbolAtPosition(document, position);
   if (member) {
-    const decoratorDetails = member.decorator ? ["", `Decorator: \`@${member.decorator}\``] : [];
+    const decoratorDetails = buildMemberDecoratorDetails(document, member);
     return {
       contents: {
         kind: "markdown",
@@ -131,6 +131,28 @@ function readLine(document: TextDocument, line: number): string {
   });
 }
 
+function buildMemberDecoratorDetails(
+  document: TextDocument,
+  member: { decorator?: string; declarationText: string },
+): string[] {
+  if (!member.decorator) {
+    return [];
+  }
+
+  const details = ["", `Decorator: \`@${member.decorator}\``];
+  if (member.decorator === "Provide") {
+    details.push("", "This field acts as a **provider** for descendant components.");
+  }
+  if (member.decorator === "Consume") {
+    details.push("", "This field acts as a **consumer** of a provided value.");
+  }
+  if (member.decorator === "ObjectLink") {
+    const observedHint = findObservedClassHint(document, member.declarationText);
+    details.push("", observedHint ?? "This field links to an **Observed** object for reactive updates.");
+  }
+  return details;
+}
+
 function buildDecoratedDeclarationHover(document: TextDocument, position: Position): Hover | null {
   const tree = parseArkTS(document);
   if (!tree) {
@@ -211,7 +233,7 @@ function getDecoratorsForNamedTopLevelDeclaration(document: TextDocument, name: 
     return [];
   }
 
-  for (const type of ["function_declaration", "struct_declaration", "interface_declaration"] as const) {
+  for (const type of ["function_declaration", "struct_declaration", "interface_declaration", "class_declaration"] as const) {
     const match = findNodesByType(tree, type).find((node) =>
       ["identifier", "type_identifier", "property_identifier"].some((childType) => findNamedChild(node, childType)?.text === name),
     );
@@ -221,6 +243,19 @@ function getDecoratorsForNamedTopLevelDeclaration(document: TextDocument, name: 
   }
 
   return [];
+}
+
+function findObservedClassHint(document: TextDocument, declarationText: string): string | null {
+  const match = declarationText.match(/:\s*([A-Za-z_]\w*)/u);
+  const typeName = match?.[1];
+  if (!typeName) {
+    return null;
+  }
+
+  const decorators = getDecoratorsForNamedTopLevelDeclaration(document, typeName);
+  return decorators.includes("Observed")
+    ? `This field links to an **Observed** object: \`${typeName}\`.`
+    : null;
 }
 
 function formatDecoratorDetails(decorators: string[]): string[] {

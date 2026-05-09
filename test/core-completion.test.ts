@@ -163,6 +163,44 @@ describe("buildCompletionItems", () => {
     ]);
   });
 
+  it("supports instance member completion for one-line struct bodies via parser", () => {
+    const document = makeDocument(
+      "file:///home.ets",
+      "@Component export struct HomePage { @State count: number = 0; handleTap(): void {} build() { this.c } }",
+    );
+
+    const items = buildClassMemberCompletionItems(document, "HomePage", "c", "instance");
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        label: "count",
+        kind: CompletionItemKind.Field,
+      }),
+    ]);
+  });
+
+  it("adds build-context UI suggestions inside ArkTS build methods", () => {
+    const document = makeDocument(
+      "file:///home.ets",
+      [
+        "@Component",
+        "export struct HomePage {",
+        "  build() {",
+        "    Te",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const items = buildCompletionItems([document], document, Position.create(3, 6));
+
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        label: "Text",
+      }),
+    );
+  });
+
   it("resolves this member completion inside decorated ArkTS components", () => {
     const document = makeDocument(
       "file:///home.ets",

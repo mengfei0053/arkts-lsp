@@ -7,9 +7,24 @@ import {
   WorkspaceSymbol,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { ArkTSNode, findNodesByType, getDecoratorNames, getTopLevelDeclarations, parseArkTS } from "./parser.js";
 import { getEnclosingTypeContextAtPosition, getWordAtPosition, isPositionWithinRange, matchArktsTypeDeclaration } from "./text.js";
 
 export function collectDocumentSymbols(document: TextDocument): SymbolInformation[] {
+  const parserDeclarations = extractTopLevelDeclarationsFromParser(document);
+  if (parserDeclarations.length > 0) {
+    return parserDeclarations.map((declaration) =>
+      createSymbol(
+        document,
+        declaration.lineIndex,
+        declaration.line,
+        declaration.name,
+        declaration.kind,
+        declaration.containerName,
+      ),
+    );
+  }
+
   return extractTopLevelDeclarations(document).map((declaration) =>
     createSymbol(
       document,
@@ -43,7 +58,10 @@ export function collectWorkspaceSymbols(documents: TextDocument[], query: string
 
 export function collectExportedSymbolLocations(document: TextDocument): Map<string, Location[]> {
   const result = new Map<string, Location[]>();
-  for (const declaration of extractTopLevelDeclarations(document)) {
+  const declarations = extractTopLevelDeclarationsFromParser(document);
+  const sourceDeclarations = declarations.length > 0 ? declarations : extractTopLevelDeclarations(document);
+
+  for (const declaration of sourceDeclarations) {
     if (!declaration.exported) {
       continue;
     }
@@ -117,6 +135,11 @@ export type TypeMemberSymbol = {
 };
 
 export function collectTypeMemberSymbols(document: TextDocument, typeName: string): TypeMemberSymbol[] {
+  const parserMembers = collectTypeMemberSymbolsFromParser(document, typeName);
+  if (parserMembers.length > 0) {
+    return parserMembers;
+  }
+
   const lines = document.getText().split(/\r?\n/u);
   const classIndex = lines.findIndex((line) => matchArktsTypeDeclaration(line)?.name === typeName);
   if (classIndex < 0) {
@@ -218,6 +241,12 @@ export function findDocumentMemberSymbolAtPosition(document: TextDocument, posit
   }
 
   return member;
+}
+
+export function collectAllTypeMemberSymbols(document: TextDocument): TypeMemberSymbol[] {
+  return collectDocumentSymbols(document)
+    .filter((symbol) => symbol.kind === SymbolKind.Class)
+    .flatMap((symbol) => collectTypeMemberSymbols(document, symbol.name));
 }
 
 export function typeMemberLabel(member: TypeMemberSymbol): string {
@@ -361,6 +390,147 @@ function createLocation(document: TextDocument, lineIndex: number, line: string,
       end: { line: lineIndex, character: startCharacter + name.length },
     },
   };
+}
+
+function extractTopLevelDeclarationsFromParser(document: TextDocument): TopLevelDeclaration[] {
+  const tree = parseArkTS(document);
+  if (!tree) {
+    return [];
+  }
+
+  const topLevel = getTopLevelDeclarations(tree);
+  const declarations: TopLevelDeclaration[] = [
+    ...topLevel.structs.map((item) => ({
+      name: item.name,
+      kind: SymbolKind.Class,
+      lineIndex: item.line,
+      line: readLine(document, item.line),
+      containerName: item.decorators.at(-1),
+      exported: item.exported,
+    })),
+    ...topLevel.functions.map((item) => ({
+      name: item.name,
+      kind: SymbolKind.Function,
+      lineIndex: item.line,
+      line: readLine(document, item.line),
+      exported: item.exported,
+    })),
+    ...topLevel.interfaces.map((item) => ({
+      name: item.name,
+      kind: SymbolKind.Interface,
+      lineIndex: item.line,
+      line: readLine(document, item.line),
+      exported: item.exported,
+    })),
+    ...topLevel.variables.map((item) => ({
+      name: item.name,
+      kind: SymbolKind.Variable,
+      lineIndex: item.line,
+      line: readLine(document, item.line),
+      exported: item.exported,
+    })),
+  ];
+
+  for (const node of findNodesByType(tree, "class_declaration")) {
+    if (!isParserTopLevelNode(node)) {
+      continue;
+    }
+    declarations.push({
+      name: findParserChildText(node, "type_identifier") ?? "",
+      kind: SymbolKind.Class,
+      lineIndex: node.startPosition.line,
+      line: readLine(document, node.startPosition.line),
+      containerName: getDecoratorNames(node).at(-1),
+      exported: node.parent?.type === "export_statement",
+    });
+  }
+
+  return declarations
+    .filter((item) => item.name)
+    .sort((left, right) => left.lineIndex - right.lineIndex || left.line.indexOf(left.name) - right.line.indexOf(right.name));
+}
+
+function collectTypeMemberSymbolsFromParser(document: TextDocument, typeName: string): TypeMemberSymbol[] {
+  const tree = parseArkTS(document);
+  if (!tree) {
+    return [];
+  }
+
+  const candidateNodes = [
+    ...findNodesByType(tree, "struct_declaration"),
+    ...findNodesByType(tree, "class_declaration"),
+  ];
+  const targetNode = candidateNodes.find((node) => findParserChildText(node, "type_identifier") === typeName);
+  if (!targetNode) {
+    return [];
+  }
+
+  const classBody = targetNode.children.find((child) => child.type === "class_body");
+  if (!classBody) {
+    return [];
+  }
+
+  const scopeRange = {
+    start: classBody.startPosition,
+    end: classBody.endPosition,
+  };
+  const members: TypeMemberSymbol[] = [];
+
+  for (const child of classBody.children) {
+    if (child.type === "public_field_definition") {
+      const name = findParserChildText(child, "property_identifier");
+      if (!name) {
+        continue;
+      }
+      members.push({
+        name,
+        kind: "field",
+        location: createLocation(document, child.startPosition.line, readLine(document, child.startPosition.line), name),
+        containerName: typeName,
+        declarationText: singleLine(child.text),
+        decorator: getDecoratorNames(child).at(-1),
+        scopeRange,
+      });
+      continue;
+    }
+
+    if (child.type === "method_definition") {
+      const name = findParserChildText(child, "property_identifier");
+      if (!name || name === "constructor") {
+        continue;
+      }
+      members.push({
+        name,
+        kind: "method",
+        location: createLocation(document, child.startPosition.line, readLine(document, child.startPosition.line), name),
+        containerName: typeName,
+        declarationText: singleLine(child.text),
+        decorator: getDecoratorNames(child).at(-1),
+        scopeRange,
+      });
+    }
+  }
+
+  return dedupeTypeMembers(members);
+}
+
+function isParserTopLevelNode(node: ArkTSNode): boolean {
+  return node.parent?.type === "program" || node.parent?.type === "export_statement";
+}
+
+function findParserChildText(node: ArkTSNode, type: string): string | null {
+  return node.children.find((child) => child.type === type)?.text ?? null;
+}
+
+function readLine(document: TextDocument, line: number): string {
+  return document.getText({
+    start: { line, character: 0 },
+    end: { line: line + 1, character: 0 },
+  });
+}
+
+function singleLine(text: string): string {
+  return text.replace(/\s+/gu, " ").trim();
 }
 
 function dedupeTypeMembers(members: TypeMemberSymbol[]): TypeMemberSymbol[] {

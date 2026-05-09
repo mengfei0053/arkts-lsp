@@ -45,6 +45,18 @@ describe("collectDiagnostics", () => {
 
     expect(diagnostics).toHaveLength(2);
   });
+
+  it("does not report any diagnostics for comment-only any text", () => {
+    const document = makeDocument(
+      "file:///entry.ets",
+      ["// TODO keep tracking", "// const fake: any = value;"].join("\n"),
+    );
+
+    const diagnostics = collectDiagnostics(document, { maxNumberOfProblems: 10 });
+
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0].message).toContain("TODO");
+  });
 });
 
 describe("collectDocumentSymbols", () => {
@@ -70,6 +82,17 @@ describe("collectDocumentSymbols", () => {
     expect(symbols[1].kind).toBe(SymbolKind.Class);
     expect(symbols[1].containerName).toBeUndefined();
     expect(symbols[2].kind).toBe(SymbolKind.Function);
+  });
+
+  it("extracts multiple top-level declarations from the same line", () => {
+    const document = makeDocument(
+      "file:///inline.ets",
+      "export function alpha() {} export function beta() {} const gamma = 1;",
+    );
+
+    const symbols = collectDocumentSymbols(document);
+
+    expect(symbols.map((symbol) => symbol.name)).toEqual(["alpha", "beta", "gamma"]);
   });
 });
 
@@ -151,6 +174,47 @@ describe("workspace navigation helpers", () => {
       range: {
         start: { line: 2, character: 9 },
         end: { line: 2, character: 14 },
+      },
+    });
+  });
+
+  it("resolves @Consume fields to matching @Provide definitions across documents", () => {
+    const provider = makeDocument(
+      "file:///provider.ets",
+      [
+        "struct Parent {",
+        "  @Provide sharedCount: number = 0;",
+        "  build() {}",
+        "}",
+      ].join("\n"),
+    );
+    const consumer = makeDocument(
+      "file:///consumer.ets",
+      [
+        "struct Child {",
+        "  @Consume sharedCount: number;",
+        "  build() {",
+        "    return this.sharedCount;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const definitions = findDefinitions(
+      {
+        document: consumer,
+        documents: [provider, consumer],
+        symbols: [provider, consumer].flatMap((document) => collectDocumentSymbols(document)),
+      },
+      Position.create(3, 17),
+    );
+
+    expect(definitions).toHaveLength(1);
+    expect(definitions[0]).toMatchObject({
+      uri: "file:///provider.ets",
+      range: {
+        start: { line: 1, character: 11 },
+        end: { line: 1, character: 22 },
       },
     });
   });

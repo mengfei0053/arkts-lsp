@@ -138,6 +138,7 @@ describe("@Provide / @Consume decoration awareness", () => {
     expect(hover).not.toBeNull();
     const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
     expect(contents).toContain("Provide");
+    expect(contents).toContain("provider");
   });
 
   it("recognizes @Consume decorated fields", () => {
@@ -155,6 +156,7 @@ describe("@Provide / @Consume decoration awareness", () => {
     expect(hover).not.toBeNull();
     const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
     expect(contents).toContain("Consume");
+    expect(contents).toContain("consumer");
   });
 
   it("recognizes @Observed and @ObjectLink decorated fields", () => {
@@ -176,6 +178,7 @@ describe("@Provide / @Consume decoration awareness", () => {
     expect(hover).not.toBeNull();
     const contents = typeof hover?.contents === "object" && "value" in hover.contents ? hover.contents.value : "";
     expect(contents).toContain("ObjectLink");
+    expect(contents).toContain("Observed");
   });
 });
 
