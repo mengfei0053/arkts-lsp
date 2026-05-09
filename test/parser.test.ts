@@ -472,6 +472,8 @@ describe("parser edge cases", () => {
         path: ["Column"],
         arguments: [],
         modifiers: [],
+        props: [],
+        builderBindings: [],
         range: {
           start: { line: 3, character: 4 },
           end: { line: 8, character: 5 },
@@ -482,6 +484,8 @@ describe("parser edge cases", () => {
             path: ["Column", "Text"],
             arguments: ["'hello'"],
             modifiers: [],
+            props: [],
+            builderBindings: [],
             range: {
               start: { line: 4, character: 6 },
               end: { line: 4, character: 19 },
@@ -493,6 +497,8 @@ describe("parser edge cases", () => {
             path: ["Column", "Row"],
             arguments: [],
             modifiers: [],
+            props: [],
+            builderBindings: [],
             range: {
               start: { line: 5, character: 6 },
               end: { line: 7, character: 7 },
@@ -503,6 +509,8 @@ describe("parser edge cases", () => {
                 path: ["Column", "Row", "Button"],
                 arguments: ["'ok'"],
                 modifiers: [],
+                props: [],
+                builderBindings: [],
                 range: {
                   start: { line: 6, character: 8 },
                   end: { line: 6, character: 20 },
@@ -593,6 +601,47 @@ describe("parser edge cases", () => {
       path: ["Column", "Row", "Button"],
       arguments: ["'Save'"],
       modifiers: ["width(120)"],
+    });
+  });
+
+  it("captures structured props and builder bindings from component modifiers", () => {
+    const document = makeDocument(
+      "file:///builder-tree.ets",
+      [
+        "@Component",
+        "struct HomePage {",
+        "  @Builder",
+        "  myHeader() {",
+        "    Text('header');",
+        "  }",
+        "  title: string = 'ArkTS';",
+        "  build() {",
+        "    CustomCard()",
+        "      .title(this.title)",
+        "      .headerBuilder(this.myHeader);",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const tree = parseArkTS(document)!;
+    const componentTree = getBuildMethodComponentTree(tree, "HomePage");
+
+    expect(componentTree[0]).toMatchObject({
+      name: "CustomCard",
+      path: ["CustomCard"],
+      props: [
+        { name: "title", arguments: ["this.title"] },
+        { name: "headerBuilder", arguments: ["this.myHeader"] },
+      ],
+      builderBindings: [
+        {
+          propName: "headerBuilder",
+          source: "this.myHeader",
+          sourceKind: "Builder",
+          targetName: "myHeader",
+        },
+      ],
     });
   });
 });

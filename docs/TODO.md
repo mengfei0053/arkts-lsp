@@ -53,7 +53,7 @@
 - [ ] **Tree-sitter 运行时接管** —— 解析器适配层已完成，且已开始接入 `symbols.ts`、`navigation.ts`、`completion.ts`、`diagnostics.ts`，但仍未全面 AST 化
 - [x] **`@Builder` / `@BuilderParam`** —— 已完成基础 hover / completion / navigation
 - [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover，且已支持 `@Consume -> @Provide` 的基础 definition 配对，以及 provider/consumer 双向 references / rename 联动；`@Observed/@ObjectLink` 观察链已有基础提示，但仍未完全建模
-- [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用、嵌套组件树，并给组件树节点附加源码 range、组件路径（path）、实参（arguments）、链式修饰器（modifiers）；但尚未构建完整组件语义模型（如 props 归类、slot/builder 关系等）
+- [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用、嵌套组件树，并给组件树节点附加源码 range、组件路径（path）、实参（arguments）、链式修饰器（modifiers）、结构化 props、基础 `@Builder` 绑定关系；但尚未构建完整组件语义模型（如 slot/builder 作用域关系、跨组件 props 归类等）
 - [ ] **ArkTS 类型系统感知** —— 联合类型、可选链、类型守卫等尚未建模
 - [ ] **HarmonyOS API 面增强** —— 目前不是 SDK 驱动，也没有完整签名库
 - [x] **ETS 模块解析（最小版）** —— 已支持 `@kit.*` / `@ohos.*` 的最小解析
@@ -86,10 +86,10 @@
 
 ## 📌 下一步建议优先级
 
-### P0（当前最值得继续推进）
-1. **解析器主链接管**：先把 `symbols.ts` / `diagnostics.ts` / `completion.ts` 的关键路径切到 parser
-2. **状态管理装饰器语义**：补 `@Provide/@Consume` 配对定义、`@Observed/@ObjectLink` 观察链展示
-3. **`build()` 方法分析**：识别组件 `build()`，提取 UI 组件调用上下文，支撑更真实的补全
+### 本轮冲刺（建议优先尽量做完）
+1. **`build()` 组件语义补全**：在现有组件树上继续补 `slot` / `@BuilderParam` / builder 作用域关系，并把结构化 props 用到补全/悬停上下文里
+2. **`@Observed/@ObjectLink` 观察链建模**：从仅 hover 提示升级到 definition / references 级别的项目级语义
+3. **解析器主链接管收尾**：继续把 `navigation.ts` / `completion.ts` / `hover.ts` 中残余文本启发式切到 parser helper
 
 ### P1
 4. **增量解析 + watcher**
@@ -97,8 +97,9 @@
 6. **HarmonyOS API 感知增强（SDK / 更完整签名）**
 
 ### P2
-7. **分层符号 / 调用层级 / 类型层级**
-8. **Code Lens / 扩展 Inlay Hints / Linked Editing**
+7. **ArkTS 类型系统感知**：联合类型、可选链、类型守卫等 AST 建模
+8. **分层符号 / 调用层级 / 类型层级**
+9. **Code Lens / 扩展 Inlay Hints / Linked Editing**
 
 ### P3
-9. **真实项目集成测试 / 性能基准 / 进度上报 / Moniker**
+10. **真实项目集成测试 / 性能基准 / 进度上报 / Moniker**
