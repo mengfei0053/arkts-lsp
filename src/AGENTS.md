@@ -20,6 +20,7 @@ This file applies to everything under `src/`.
 - Incremental re-parsing via tree-sitter edit API and raw Tree caching.
 - Workspace symbol index with startup pre-indexing and lifecycle integration.
 - CodeLens provider and parse cache optimizations.
+- Type system: type-model.ts (union/intersection/array/generic/nullable parsing), type-hover.ts (AST-driven type info on hover), type-inlay.ts (inferred type hints for untyped variables).
 
 ## Implementation Guidelines
 

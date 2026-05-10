@@ -13,7 +13,7 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 
 ## Current Focus
 
-- P0-P3 completed (20/20). Core LSP capabilities are stable.
+- P0-P5 completed (23/23). Core LSP capabilities are stable.
 - 25 ArkTS decorators fully supported across parser/hover/diagnostics layers (V1: 13, V2: 10 + @Monitor/@Provider/@Consumer key matching).
 - V1/V2 decorator mixing diagnostics, @Param/@Event scope, @Computed getter, @Trace scope constraints.
 - Component tree semantics with @Builder/@BuilderParam slot-like modeling and ERROR recovery.
@@ -23,6 +23,8 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 - Workspace symbol index with startup pre-indexing and lifecycle-driven updates.
 - CodeLens provider for component overviews above struct declarations.
 - Parse cache with (uri, version, contentHash) keying and raw Tree retention.
+- P4: Hierarchical Document Symbols, Call Hierarchy (incoming/outgoing), Type Hierarchy (supertypes/subtypes).
+- P5: Type system awareness (type-model.ts), type-aware hover, extended inlay hints with inferred types.
 
 ## Agent Workflow
 
