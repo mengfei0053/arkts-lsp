@@ -644,4 +644,183 @@ describe("parser edge cases", () => {
       ],
     });
   });
+
+  it("expands local builder props into slot-like child nodes on component calls", () => {
+    const document = makeDocument(
+      "file:///builder-slot-prop.ets",
+      [
+        "@Component",
+        "struct HomePage {",
+        "  @Builder",
+        "  myHeader() {",
+        "    Text('header');",
+        "  }",
+        "  build() {",
+        "    CustomCard()",
+        "      .headerBuilder(this.myHeader);",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const tree = parseArkTS(document)!;
+    const componentTree = getBuildMethodComponentTree(tree, "HomePage");
+
+    expect(componentTree[0]).toMatchObject({
+      name: "CustomCard",
+      path: ["CustomCard"],
+      slots: [
+        {
+          propName: "headerBuilder",
+          source: "this.myHeader",
+          sourceKind: "Builder",
+          targetName: "myHeader",
+        },
+      ],
+      children: [
+        {
+          name: "myHeader",
+          path: ["CustomCard", "myHeader"],
+          builderBindings: [
+            {
+              propName: "headerBuilder",
+              source: "this.myHeader",
+              sourceKind: "Builder",
+              targetName: "myHeader",
+            },
+          ],
+          slot: {
+            propName: "headerBuilder",
+            source: "this.myHeader",
+            sourceKind: "Builder",
+            targetName: "myHeader",
+          },
+          range: {
+            start: componentTree[0]?.range.start,
+            end: componentTree[0]?.range.end,
+          },
+          children: [
+            {
+              name: "Text",
+              path: ["CustomCard", "myHeader", "Text"],
+              arguments: ["'header'"],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("captures builder-param props as slot-like child nodes without inventing local body expansion", () => {
+    const document = makeDocument(
+      "file:///builder-slot-param.ets",
+      [
+        "@Component",
+        "struct HomePage {",
+        "  @BuilderParam headerBuilder: () => void;",
+        "  build() {",
+        "    CustomCard()",
+        "      .headerBuilder(this.headerBuilder);",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const tree = parseArkTS(document)!;
+    const componentTree = getBuildMethodComponentTree(tree, "HomePage");
+
+    expect(componentTree[0]).toMatchObject({
+      name: "CustomCard",
+      path: ["CustomCard"],
+      slots: [
+        {
+          propName: "headerBuilder",
+          source: "this.headerBuilder",
+          sourceKind: "BuilderParam",
+          targetName: "headerBuilder",
+        },
+      ],
+      children: [
+        {
+          name: "headerBuilder",
+          path: ["CustomCard", "headerBuilder"],
+          builderBindings: [
+            {
+              propName: "headerBuilder",
+              source: "this.headerBuilder",
+              sourceKind: "BuilderParam",
+              targetName: "headerBuilder",
+            },
+          ],
+          slot: {
+            propName: "headerBuilder",
+            source: "this.headerBuilder",
+            sourceKind: "BuilderParam",
+            targetName: "headerBuilder",
+          },
+          range: {
+            start: componentTree[0]?.range.start,
+            end: componentTree[0]?.range.end,
+          },
+          children: [],
+        },
+      ],
+    });
+  });
+
+  it("captures direct local @Builder invocations inside component blocks as builder-scoped child nodes", () => {
+    const document = makeDocument(
+      "file:///builder-slot.ets",
+      [
+        "@Component",
+        "struct HomePage {",
+        "  @Builder",
+        "  myHeader() {",
+        "    Text('header');",
+        "  }",
+        "  build() {",
+        "    Column() {",
+        "      this.myHeader();",
+        "      Text('body');",
+        "    }",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const tree = parseArkTS(document)!;
+    const componentTree = getBuildMethodComponentTree(tree, "HomePage");
+
+    expect(componentTree[0]).toMatchObject({
+      name: "Column",
+      path: ["Column"],
+    });
+    expect(componentTree[0]?.children[0]).toMatchObject({
+      name: "myHeader",
+      path: ["Column", "myHeader"],
+      arguments: [],
+      modifiers: [],
+      props: [],
+      builderBindings: [
+        {
+          propName: "call",
+          source: "this.myHeader",
+          sourceKind: "Builder",
+          targetName: "myHeader",
+        },
+      ],
+      children: [
+        {
+          name: "Text",
+          path: ["Column", "myHeader", "Text"],
+          arguments: ["'header'"],
+        },
+      ],
+    });
+    expect(componentTree[0]?.children[1]).toMatchObject({
+      name: "Text",
+      path: ["Column", "Text"],
+      arguments: ["'body'"],
+    });
+  });
 });

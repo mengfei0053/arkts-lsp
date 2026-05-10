@@ -8,7 +8,7 @@ import {
   WorkspaceEdit,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { findNodesByType, getDecoratorNames, parseArkTS } from "./parser.js";
+import { findObjectLinkMembersByObservedType, findObservedTypeDefinitions, findObservedTypeDeclarationLocations, findObservedTypeNameAtPosition } from "./observed-links.js";
 import { collectAllTypeMemberSymbols, collectDocumentSymbols, collectExportedSymbolLocations, findDocumentMemberSymbolAtPosition } from "./symbols.js";
 import {
   collectImportContexts,
@@ -88,6 +88,17 @@ export function findReferencesWithOptions(
 
     const references = collectScopedWordLocations(document, member.name, member.scopeRange);
     return includeDeclaration ? references : references.filter((location) => locationKey(location) !== locationKey(member.location));
+  }
+
+  const observedTypeName = findObservedTypeNameAtPosition(document, position);
+  if (observedTypeName) {
+    const declarations = findObservedTypeDeclarationLocations(documents, observedTypeName);
+    const declarationKeys = new Set(declarations.map((location) => locationKey(location)));
+    const references = dedupeLocations([
+      ...declarations,
+      ...findObjectLinkMembersByObservedType(documents, observedTypeName).flatMap((member) => collectScopedWordLocationsByMember(documents, member)),
+    ]);
+    return includeDeclaration ? references : references.filter((location) => !declarationKeys.has(locationKey(location)));
   }
 
   const word = getWordAtPosition(document, position);
@@ -179,6 +190,31 @@ export function buildRenameEdit(
     }
 
     addEdits(changes, document.uri, collectScopedWordLocations(document, member.name, member.scopeRange), trimmedName);
+    return Object.keys(changes).length > 0 ? { changes: dedupeTextEdits(changes) } : null;
+  }
+
+  const observedTypeName = findObservedTypeNameAtPosition(document, position);
+  if (observedTypeName) {
+    const trimmedName = newName.trim();
+    if (!trimmedName || observedTypeName === trimmedName) {
+      return null;
+    }
+
+    const changes: Record<string, TextEdit[]> = {};
+    for (const declaration of findObservedTypeDeclarationLocations(documents, observedTypeName)) {
+      const declarationDocument = documents.find((candidate) => candidate.uri === declaration.uri);
+      if (declarationDocument) {
+        addEdits(changes, declaration.uri, collectWordLocations(declarationDocument, observedTypeName), trimmedName);
+      }
+    }
+
+    for (const linkedMember of findObjectLinkMembersByObservedType(documents, observedTypeName)) {
+      const linkedDocument = documents.find((candidate) => candidate.uri === linkedMember.location.uri);
+      if (linkedDocument) {
+        addEdits(changes, linkedDocument.uri, collectScopedWordLocations(linkedDocument, observedTypeName, linkedMember.scopeRange), trimmedName);
+      }
+    }
+
     return Object.keys(changes).length > 0 ? { changes: dedupeTextEdits(changes) } : null;
   }
 
@@ -336,46 +372,6 @@ function collectScopedWordLocationsByMember(
     return [member.location];
   }
   return collectScopedWordLocations(document, member.name, member.scopeRange);
-}
-
-function findObservedTypeDefinitions(documents: TextDocument[], declarationText: string): Location[] {
-  const observedTypeName = extractAnnotatedTypeName(declarationText);
-  if (!observedTypeName) {
-    return [];
-  }
-
-  return documents.flatMap((document) => {
-    if (!hasObservedDeclaration(document, observedTypeName)) {
-      return [];
-    }
-    return collectDocumentSymbols(document)
-      .filter((symbol) => symbol.name === observedTypeName)
-      .map((symbol) => symbol.location);
-  });
-}
-
-function extractAnnotatedTypeName(declarationText: string): string | null {
-  const match = declarationText.match(/:\s*([A-Za-z_]\w*)/u);
-  return match?.[1] ?? null;
-}
-
-function hasObservedDeclaration(document: TextDocument, typeName: string): boolean {
-  const tree = parseArkTS(document);
-  if (!tree) {
-    return false;
-  }
-
-  for (const type of ["class_declaration", "struct_declaration"] as const) {
-    const match = findNodesByType(tree, type).find((node) => {
-      const identifier = node.children.find((child) => child.type === "type_identifier" || child.type === "identifier");
-      return identifier?.text === typeName;
-    });
-    if (match && getDecoratorNames(match).includes("Observed")) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function dedupeLocations(locations: Location[]): Location[] {

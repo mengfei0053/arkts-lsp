@@ -391,6 +391,35 @@ describe("workspace navigation helpers", () => {
     expect(references.some((location) => location.uri === "file:///viewer.ets" && location.range.start.line === 3)).toBe(true);
   });
 
+  it("includes linked @ObjectLink usages when references start from an @Observed type declaration", () => {
+    const observed = makeDocument(
+      "file:///model.ets",
+      [
+        "@Observed",
+        "export class FormState {",
+        "  value: number = 0;",
+        "}",
+      ].join("\n"),
+    );
+    const viewer = makeDocument(
+      "file:///viewer.ets",
+      [
+        "struct Viewer {",
+        "  @ObjectLink form: FormState;",
+        "  build() {",
+        "    return this.form.value;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+
+    const references = findReferences([observed, viewer], observed, Position.create(1, 15));
+
+    expect(references.some((location) => location.uri === "file:///model.ets" && location.range.start.line === 1)).toBe(true);
+    expect(references.some((location) => location.uri === "file:///viewer.ets" && location.range.start.line === 1)).toBe(true);
+    expect(references.some((location) => location.uri === "file:///viewer.ets" && location.range.start.line === 3)).toBe(true);
+  });
+
   it("can exclude declarations from reference results", () => {
     const first = makeDocument(
       "file:///first.ets",
@@ -480,6 +509,43 @@ describe("workspace navigation helpers", () => {
     expect(edit).not.toBeNull();
     expect(edit?.changes?.["file:///provider.ets"]).toHaveLength(1);
     expect(edit?.changes?.["file:///consumer.ets"]).toHaveLength(2);
+  });
+
+  it("renames an @Observed type together with linked @ObjectLink annotations without touching unrelated symbols", () => {
+    const observed = makeDocument(
+      "file:///model.ets",
+      [
+        "@Observed",
+        "export class FormState {",
+        "  value: number = 0;",
+        "}",
+      ].join("\n"),
+    );
+    const viewer = makeDocument(
+      "file:///viewer.ets",
+      [
+        "struct Viewer {",
+        "  @ObjectLink form: FormState;",
+        "  build() {",
+        "    return this.form.value;",
+        "  }",
+        "}",
+      ].join("\n"),
+    );
+    const helper = makeDocument(
+      "file:///helper.ts",
+      [
+        "export class FormState {}",
+        "const value = new FormState();",
+      ].join("\n"),
+    );
+
+    const edit = buildRenameEdit([observed, viewer, helper], observed, Position.create(1, 15), "ProfileState");
+
+    expect(edit).not.toBeNull();
+    expect(edit?.changes?.["file:///model.ets"]?.some((entry) => entry.newText === "ProfileState")).toBe(true);
+    expect(edit?.changes?.["file:///viewer.ets"]?.some((entry) => entry.newText === "ProfileState")).toBe(true);
+    expect(edit?.changes?.["file:///helper.ts"]).toBeUndefined();
   });
 
   it("renames linked @Provide/@Consume state when rename starts from the consumer side", () => {

@@ -84,6 +84,13 @@ export type BuildMethodBuilderBinding = {
   targetName?: string;
 };
 
+export type BuildMethodComponentSlot = {
+  propName: string;
+  source: string;
+  sourceKind: "Builder" | "BuilderParam";
+  targetName: string;
+};
+
 export type BuildMethodComponentTreeNode = {
   name: string;
   path: string[];
@@ -91,6 +98,8 @@ export type BuildMethodComponentTreeNode = {
   modifiers: string[];
   props: BuildMethodComponentProp[];
   builderBindings: BuildMethodBuilderBinding[];
+  slot?: BuildMethodComponentSlot;
+  slots?: BuildMethodComponentSlot[];
   range: {
     start: ArkTSPoint;
     end: ArkTSPoint;
@@ -310,9 +319,11 @@ export function getBuildMethodComponentTree(tree: ArkTSTree, structName: string)
     return [];
   }
 
+  const builderFunctions = getBuilderFunctions(tree).filter((item) => item.structName === structName);
   const builderContext = {
-    builderNames: new Set(getBuilderFunctions(tree).filter((item) => item.structName === structName).map((item) => item.name)),
+    builderNames: new Set(builderFunctions.map((item) => item.name)),
     builderParamNames: new Set(getBuilderParamFields(tree).filter((item) => item.structName === structName).map((item) => item.name)),
+    builderFunctionNodes: new Map(builderFunctions.map((item) => [item.name, item.node])),
   };
 
   return buildComponentTreeFromNode(statementBlock, [], builderContext);
@@ -333,7 +344,7 @@ function findBuildMethodNode(tree: ArkTSTree, structName: string): ArkTSNode | n
 function buildComponentTreeFromNode(
   node: ArkTSNode,
   ancestorPath: string[] = [],
-  builderContext: { builderNames: Set<string>; builderParamNames: Set<string> },
+  builderContext: { builderNames: Set<string>; builderParamNames: Set<string>; builderFunctionNodes: Map<string, ArkTSNode> },
 ): BuildMethodComponentTreeNode[] {
   const result: BuildMethodComponentTreeNode[] = [];
   for (const child of node.children) {
@@ -363,19 +374,24 @@ function buildComponentTreeFromNode(
     if (child.type === "expression_statement") {
       const call = child.children.find((entry) => entry.type === "call_expression");
       const componentDetails = call ? extractComponentCallDetails(call, builderContext) : null;
-      if (componentDetails && startsWithUppercase(componentDetails.name)) {
+      if (componentDetails && (startsWithUppercase(componentDetails.name) || componentDetails.builderBindings.some((binding) => binding.propName === "call"))) {
+        const path = [...ancestorPath, componentDetails.name];
         result.push({
           name: componentDetails.name,
-          path: [...ancestorPath, componentDetails.name],
+          path,
           arguments: componentDetails.arguments,
           modifiers: componentDetails.modifiers,
           props: componentDetails.props,
           builderBindings: componentDetails.builderBindings,
+          slots: buildHostSlots(componentDetails.builderBindings),
           range: {
             start: call?.startPosition ?? child.startPosition,
             end: call?.endPosition ?? child.endPosition,
           },
-          children: [],
+          children: buildBuilderLinkedChildren(componentDetails.builderBindings, path, {
+            start: call?.startPosition ?? child.startPosition,
+            end: call?.endPosition ?? child.endPosition,
+          }, builderContext),
         });
       }
       continue;
@@ -386,7 +402,7 @@ function buildComponentTreeFromNode(
 
 function extractComponentCallDetails(
   node: ArkTSNode,
-  builderContext: { builderNames: Set<string>; builderParamNames: Set<string> },
+  builderContext: { builderNames: Set<string>; builderParamNames: Set<string>; builderFunctionNodes: Map<string, ArkTSNode> },
 ): { name: string; arguments: string[]; modifiers: string[]; props: BuildMethodComponentProp[]; builderBindings: BuildMethodBuilderBinding[] } | null {
   const chain = unwrapCallChain(node);
   const rootCall = chain.at(0);
@@ -395,6 +411,7 @@ function extractComponentCallDetails(
     return null;
   }
 
+  const directBuilderBinding = inferDirectBuilderCallBinding(rootCall, builderContext);
   const props = chain.slice(1).flatMap((call) => {
     const modifierName = findPropertyNameFromCall(call);
     if (!modifierName) {
@@ -411,7 +428,10 @@ function extractComponentCallDetails(
     arguments: extractArguments(findChildNode(rootCall, "arguments")),
     modifiers: props.map((prop) => `${prop.name}(${prop.arguments.join(", ")})`),
     props,
-    builderBindings: props.flatMap((prop) => inferBuilderBinding(prop, builderContext) ? [inferBuilderBinding(prop, builderContext)!] : []),
+    builderBindings: [
+      ...props.flatMap((prop) => inferBuilderBinding(prop, builderContext) ? [inferBuilderBinding(prop, builderContext)!] : []),
+      ...(directBuilderBinding ? [directBuilderBinding] : []),
+    ],
   };
 }
 
@@ -446,6 +466,14 @@ function findChildNode(node: ArkTSNode, type: string): ArkTSNode | undefined {
 function findPropertyNameFromCall(node: ArkTSNode): string | null {
   const memberExpression = node.children.find((child) => child.type === "member_expression");
   return memberExpression?.children.find((child) => child.type === "property_identifier")?.text ?? null;
+}
+
+function findDirectCallSource(node: ArkTSNode): string | null {
+  const memberExpression = node.children.find((child) => child.type === "member_expression");
+  if (memberExpression) {
+    return memberExpression.text;
+  }
+  return node.children.find((child) => child.type === "identifier")?.text ?? null;
 }
 
 function inferBuilderBinding(
@@ -490,6 +518,98 @@ function inferBuilderBinding(
   }
 
   return null;
+}
+
+function inferDirectBuilderCallBinding(
+  node: ArkTSNode,
+  builderContext: { builderNames: Set<string>; builderParamNames: Set<string> },
+): BuildMethodBuilderBinding | null {
+  const source = findDirectCallSource(node)?.trim();
+  if (!source) {
+    return null;
+  }
+
+  const targetName = extractBuilderTargetName(source);
+  if (!targetName) {
+    return null;
+  }
+
+  if (builderContext.builderNames.has(targetName)) {
+    return {
+      propName: "call",
+      source,
+      sourceKind: "Builder",
+      targetName,
+    };
+  }
+
+  if (builderContext.builderParamNames.has(targetName)) {
+    return {
+      propName: "call",
+      source,
+      sourceKind: "BuilderParam",
+      targetName,
+    };
+  }
+
+  return null;
+}
+
+function buildHostSlots(
+  bindings: BuildMethodBuilderBinding[],
+): BuildMethodComponentSlot[] | undefined {
+  const slots: BuildMethodComponentSlot[] = [];
+  for (const binding of bindings) {
+    if (binding.propName === "call" || binding.sourceKind === "Unknown" || !binding.targetName) {
+      continue;
+    }
+    slots.push({
+      propName: binding.propName,
+      source: binding.source,
+      sourceKind: binding.sourceKind,
+      targetName: binding.targetName,
+    });
+  }
+  return slots.length > 0 ? slots : undefined;
+}
+
+function buildBuilderLinkedChildren(
+  bindings: BuildMethodBuilderBinding[],
+  path: string[],
+  ownerRange: { start: ArkTSPoint; end: ArkTSPoint },
+  builderContext: { builderNames: Set<string>; builderParamNames: Set<string>; builderFunctionNodes: Map<string, ArkTSNode> },
+): BuildMethodComponentTreeNode[] {
+  const directBuilderCall = bindings.find((binding) => binding.propName === "call" && binding.sourceKind === "Builder");
+  if (directBuilderCall?.targetName) {
+    const builderNode = builderContext.builderFunctionNodes.get(directBuilderCall.targetName);
+    const block = builderNode?.children.find((child) => child.type === "statement_block");
+    return block ? buildComponentTreeFromNode(block, path, builderContext) : [];
+  }
+
+  return bindings.flatMap((binding) => {
+    if ((binding.sourceKind !== "Builder" && binding.sourceKind !== "BuilderParam") || !binding.targetName) {
+      return [];
+    }
+    const builderNode = binding.sourceKind === "Builder" ? builderContext.builderFunctionNodes.get(binding.targetName) : null;
+    const block = builderNode?.children.find((child) => child.type === "statement_block");
+    const childPath = [...path, binding.targetName];
+    return [{
+      name: binding.targetName,
+      path: childPath,
+      arguments: [],
+      modifiers: [],
+      props: [],
+      builderBindings: [binding],
+      slot: {
+        propName: binding.propName,
+        source: binding.source,
+        sourceKind: binding.sourceKind,
+        targetName: binding.targetName,
+      },
+      range: ownerRange,
+      children: block ? buildComponentTreeFromNode(block, childPath, builderContext) : [],
+    } satisfies BuildMethodComponentTreeNode];
+  });
 }
 
 function extractBuilderTargetName(source: string): string | null {
@@ -553,7 +673,12 @@ function findFirstCallName(node: ArkTSNode): string | null {
     return findChildText(node, "identifier");
   }
   if (node.type === "call_expression") {
-    return findChildText(node, "identifier");
+    return findChildText(node, "identifier")
+      ?? node.children
+        .find((child) => child.type === "member_expression")
+        ?.children.find((child) => child.type === "property_identifier")
+        ?.text
+      ?? null;
   }
   return null;
 }

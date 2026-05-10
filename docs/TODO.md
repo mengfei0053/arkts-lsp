@@ -52,8 +52,8 @@
 ### ArkTS 专属能力
 - [ ] **Tree-sitter 运行时接管** —— 解析器适配层已完成，且已开始接入 `symbols.ts`、`navigation.ts`、`completion.ts`、`diagnostics.ts`，但仍未全面 AST 化
 - [x] **`@Builder` / `@BuilderParam`** —— 已完成基础 hover / completion / navigation
-- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover；`@Provide/@Consume` 已支持 `@Consume -> @Provide` 的基础 definition 配对，以及 provider/consumer 双向 references / rename 联动；`@ObjectLink` 已支持跳转到匹配的 `@Observed` 类型定义，并在 references 中联动对应 `@Observed` 类型声明；但 `@Observed/@ObjectLink` 观察链仍未完全建模
-- [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用、嵌套组件树，并给组件树节点附加源码 range、组件路径（path）、实参（arguments）、链式修饰器（modifiers）、结构化 props、基础 `@Builder` 绑定关系；但尚未构建完整组件语义模型（如 slot/builder 作用域关系、跨组件 props 归类等）
+- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover；`@Provide/@Consume` 已支持 `@Consume -> @Provide` 的基础 definition 配对，以及 provider/consumer 双向 references / rename 联动；`@ObjectLink` 已支持跳转到匹配的 `@Observed` 类型定义，且 `@ObjectLink` 与 `@Observed` 已支持双向 references 联动；从 `@Observed` 声明发起的 rename 也已能联动匹配的 `@ObjectLink` 类型标注；但 `@Observed/@ObjectLink` 观察链仍未完全建模
+- [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用、嵌套组件树，并给组件树节点附加源码 range、组件路径（path）、实参（arguments）、链式修饰器（modifiers）、结构化 props、基础 `@Builder` 绑定关系，以及组件块内直接本地 `@Builder` 调用的子节点表示与本地 `@Builder` 体展开，并可把组件 modifier 上绑定的本地 `@Builder` / `@BuilderParam` 映射成 slot-like 子节点；其中本地 `@Builder` 支持体展开，`@BuilderParam` 仅保留占位子节点，且占位子节点的 range 已锚定到宿主组件调用范围，同时本地 `@Builder` slot-like 子节点的 range 也已锚定到宿主组件调用范围，并开始显式记录 slot 元数据（prop/source/sourceKind/targetName），宿主组件节点已可显式暴露 slots 列表；但尚未构建完整组件语义模型（如 slot/builder 作用域关系、跨组件 props 归类等）
 - [ ] **ArkTS 类型系统感知** —— 联合类型、可选链、类型守卫等尚未建模
 - [ ] **HarmonyOS API 面增强** —— 目前不是 SDK 驱动，也没有完整签名库
 - [x] **ETS 模块解析（最小版）** —— 已支持 `@kit.*` / `@ohos.*` 的最小解析
