@@ -167,18 +167,49 @@ export type ObservedV2ClassInfo = {
 const parser = new Parser();
 parser.setLanguage(ArkTSModule.ArkTS);
 
+// ─── Parse Cache ─────────────────────────────────────────────────────────────
+
+const parseCache = new Map<string, { version: number; contentHash: number; tree: ArkTSTree }>();
+
+export function clearParseCache(uri?: string): void {
+  if (uri) {
+    parseCache.delete(uri);
+  } else {
+    parseCache.clear();
+  }
+}
+
+function contentHash(text: string): number {
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
 export function parseArkTS(document: TextDocument): ArkTSTree | null {
   const source = document.getText();
   if (!source.trim()) {
     return null;
   }
 
+  // Return cached tree if document version and content haven't changed
+  const cacheKey = document.uri;
+  const cached = parseCache.get(cacheKey);
+  const hash = contentHash(source);
+  if (cached && cached.version === document.version && cached.contentHash === hash) {
+    return cached.tree;
+  }
+
   const tree = parser.parse(source);
-  return {
+  const result: ArkTSTree = {
     rootNodeType: tree.rootNode.type,
     rootNode: wrapNode(tree.rootNode, source, null),
     document,
   };
+
+  parseCache.set(cacheKey, { version: document.version, contentHash: hash, tree: result });
+  return result;
 }
 
 export function findNodesByType(tree: ArkTSTree, type: string): ArkTSNode[] {

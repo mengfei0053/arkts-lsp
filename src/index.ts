@@ -19,6 +19,7 @@ import {
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocuments } from "vscode-languageserver";
+import { clearParseCache } from "./parser.js";
 import {
   buildCodeLenses,
   buildFoldingRanges,
