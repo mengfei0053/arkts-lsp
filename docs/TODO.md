@@ -74,7 +74,7 @@
 - [x] **Call Hierarchy** —— `call-hierarchy.ts`，prepareCallHierarchy + incomingCalls + outgoingCalls
 - [x] **Type Hierarchy** —— `type-hierarchy.ts`，prepareTypeHierarchy + supertypes + subtypes
 - [x] **Code Lens** —— `codelens.ts`，struct 上方显示组件概览
-- [ ] **扩展 Inlay Hints** —— 类型推断、链式调用参数等
+- [x] **扩展 Inlay Hints** —— `type-inlay.ts`，无类型标注变量的推断类型提示（`InlayHintKind.Type`）
 - [ ] **Linked Editing Ranges**
 - [ ] **Moniker**
 
@@ -119,8 +119,10 @@
 ### 已完成（P5-1）
 1. ✅ **ArkTS 类型系统感知**：`type-model.ts` — 联合类型、交叉类型、数组类型、泛型、字面量、类型 annotations 的 AST 解析 + `type-hover.ts` 接入 hover
 
+### 已完成（P5-2）
+2. ✅ **扩展 Inlay Hints**：`type-inlay.ts` — 无类型标注变量的推断类型提示（number/string/boolean/new ClassName）
+
 ### 下一轮建议（P5+）
-2. **扩展 Inlay Hints**：类型推断、链式调用
 3. **HarmonyOS API 感知增强**：SDK 驱动 + 完整签名
 4. **文件监听 + workspace/configuration**
 5. **真实项目集成测试 + 性能基准**
