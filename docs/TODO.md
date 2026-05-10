@@ -70,9 +70,9 @@
 - [x] **ETS 模块解析（最小版）** —— 已支持 `@kit.*` / `@ohos.*` 的最小解析
 
 ### LSP 协议扩展
-- [ ] **分层 Document Symbols** —— 当前仍是扁平列表
-- [ ] **Call Hierarchy**
-- [ ] **Type Hierarchy**
+- [x] **分层 Document Symbols** —— `collectHierarchicalDocumentSymbols()`，struct 成员嵌套为 children
+- [x] **Call Hierarchy** —— `call-hierarchy.ts`，prepareCallHierarchy + incomingCalls + outgoingCalls
+- [x] **Type Hierarchy** —— `type-hierarchy.ts`，prepareTypeHierarchy + supertypes + subtypes
 - [x] **Code Lens** —— `codelens.ts`，struct 上方显示组件概览
 - [ ] **扩展 Inlay Hints** —— 类型推断、链式调用参数等
 - [ ] **Linked Editing Ranges**
@@ -110,10 +110,15 @@
 9. ✅ **Code Lens**：codelens.ts
 
 ### 下一轮建议（P4+）
+
+### 已完成（P4）
+1. ✅ **分层 Document Symbols**：`collectHierarchicalDocumentSymbols()`，struct 成员嵌套
+2. ✅ **Call Hierarchy**：prepareCallHierarchy + incomingCalls + outgoingCalls
+3. ✅ **Type Hierarchy**：prepareTypeHierarchy + supertypes + subtypes
+
+### 下一轮建议（P5+）
 1. **ArkTS 类型系统感知**：联合类型、可选链、类型守卫等 AST 建模
-2. **分层 Document Symbols**：替代扁平符号列表
-3. **Call Hierarchy / Type Hierarchy**
-4. **扩展 Inlay Hints**：类型推断、链式调用
-5. **HarmonyOS API 感知增强**：SDK 驱动 + 完整签名
-6. **文件监听 + workspace/configuration**
-7. **真实项目集成测试 + 性能基准**
+2. **扩展 Inlay Hints**：类型推断、链式调用
+3. **HarmonyOS API 感知增强**：SDK 驱动 + 完整签名
+4. **文件监听 + workspace/configuration**
+5. **真实项目集成测试 + 性能基准**
