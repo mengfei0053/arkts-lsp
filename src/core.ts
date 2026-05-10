@@ -13,3 +13,4 @@ export * from "./code-action.js";
 export * from "./semantic-tokens.js";
 export * from "./server-capabilities.js";
 export * from "./codelens.js";
+export * from "./prop-diagnostics.js";

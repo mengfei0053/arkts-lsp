@@ -347,7 +347,7 @@ connection.onSignatureHelp(({ textDocument, position }): SignatureHelp | null =>
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   const settings = await getDocumentSettings(textDocument.uri);
-  connection.sendDiagnostics({ uri: textDocument.uri, diagnostics: collectDiagnostics(textDocument, settings) });
+  connection.sendDiagnostics({ uri: textDocument.uri, diagnostics: collectDiagnostics(textDocument, settings, documents.all()) });
 }
 
 async function getDocumentSettings(_resource: string): Promise<ServerSettings> {

@@ -10,9 +10,10 @@ import {
   parseArkTS,
 } from "./parser.js";
 import { ServerSettings } from "./types.js";
+import { validateComponentCallProps } from "./prop-diagnostics.js";
 import { validateComputedGetter, validateTraceScope, validateV1V2Mixing, validateV2OnlyDecoratorScope } from "./v2-diagnostics.js";
 
-export function collectDiagnostics(textDocument: TextDocument, settings: ServerSettings): Diagnostic[] {
+export function collectDiagnostics(textDocument: TextDocument, settings: ServerSettings, projectDocuments?: TextDocument[]): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const lines = textDocument.getText().split(/\r?\n/u);
 
@@ -67,6 +68,11 @@ export function collectDiagnostics(textDocument: TextDocument, settings: ServerS
     validateV2OnlyDecoratorScope(tree, diagnostics, settings.maxNumberOfProblems);
     validateComputedGetter(tree, diagnostics, settings.maxNumberOfProblems);
     validateTraceScope(tree, diagnostics, settings.maxNumberOfProblems);
+
+    // Validate component call props (unknown prop / missing required prop)
+    if (projectDocuments && projectDocuments.length > 0) {
+      validateComponentCallProps(textDocument, projectDocuments, diagnostics, settings.maxNumberOfProblems);
+    }
   }
 
   return diagnostics;
