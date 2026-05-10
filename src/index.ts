@@ -5,6 +5,7 @@ import {
   DidChangeConfigurationNotification,
   DocumentHighlight,
   DocumentLink,
+  FoldingRange,
   Hover,
   InlayHint,
   InitializeParams,
@@ -18,6 +19,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocuments } from "vscode-languageserver";
 import {
+  buildFoldingRanges,
   buildImportCompletionItems,
   buildClassMemberCompletionItems,
   buildLinkedRenameEdit,
@@ -201,6 +203,14 @@ connection.onDocumentLinks(({ textDocument }): DocumentLink[] => {
 connection.onSelectionRanges(({ textDocument, positions }) => {
   const document = loadDocumentFromUri(textDocument.uri, documents.all());
   return buildSelectionRangeResponse(document, positions);
+});
+
+connection.onFoldingRanges(({ textDocument }): FoldingRange[] => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  if (!document) {
+    return [];
+  }
+  return buildFoldingRanges(document);
 });
 
 connection.languages.inlayHint.on(({ textDocument, range }): InlayHint[] => {
