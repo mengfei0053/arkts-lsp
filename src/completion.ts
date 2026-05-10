@@ -34,11 +34,30 @@ const arktsKeywords = [
   "return",
   "async",
   "await",
+  // V1 decorators
   "@Entry",
   "@Component",
   "@State",
   "@Prop",
   "@Link",
+  "@Watch",
+  "@Provide",
+  "@Consume",
+  "@ObjectLink",
+  "@Observed",
+  "@Track",
+  "@Builder",
+  "@BuilderParam",
+  // V2 decorators
+  "@ComponentV2",
+  "@Local",
+  "@Param",
+  "@Event",
+  "@Monitor",
+  "@Provider",
+  "@Consumer",
+  "@Computed",
+  "@ObservedV2",
 ];
 
 export function buildCompletionItems(documents: TextDocument[], document: TextDocument, position: { line: number; character: number }): CompletionItem[] {
