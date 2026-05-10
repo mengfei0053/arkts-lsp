@@ -5,6 +5,7 @@ import { ArkTSNode, findNodesByType, getBuildMethodComponentTree, getDecoratorNa
 import { escapeMarkdown, getEnclosingTypeContextAtPosition, getImportBindingAtPosition, getWordAtPosition } from "./text.js";
 import { collectDocumentSymbols, displayDocumentName, findDocumentMemberSymbolAtPosition, symbolKindLabel, typeMemberLabel } from "./symbols.js";
 import { lookupImportedComponent, resolveImportedComponents } from "./component-resolver.js";
+import { getComponentProps } from "./component-props.js";
 
 export function buildHover(document: TextDocument, position: Position): Hover | null {
   // Check decorator-specific hovers first (precise position matching on decorator nodes)
@@ -182,6 +183,17 @@ export function buildLinkedHover(
           lines.push(`Declaration: \`${escapeMarkdown(declarationText)}\``);
         }
         lines.push(...formatDecoratorDetails(decorators));
+
+        // Show component props
+        const props = getComponentProps(targetDoc, imported.structName);
+        if (props.length > 0) {
+          lines.push("", `**Props** (${props.length}):`);
+          for (const prop of props) {
+            const defaultMark = prop.hasDefault ? " = ..." : "";
+            lines.push(`- \`@${prop.decorator}\` \`${prop.name}\`: \`${prop.type}\`${defaultMark}`);
+          }
+        }
+
         return {
           contents: { kind: "markdown", value: lines.join("\n") },
         };
@@ -481,6 +493,19 @@ function buildComponentTreeHover(document: TextDocument, position: Position): Ho
     for (const binding of node.builderBindings) {
       if (binding.propName !== "call") {
         lines.push("", `Prop \`${binding.propName}\`: \`${binding.source}\` (${binding.sourceKind})`);
+      }
+    }
+  }
+
+  // Show props for custom (non-builtin) components
+  const builtinComponents = new Set(["Text", "Row", "Column", "Button", "Image", "List", "ForEach", "If", "Else", "Blank"]);
+  if (!builtinComponents.has(node.name)) {
+    const props = getComponentProps(document, node.name);
+    if (props.length > 0) {
+      lines.push("", `**Props** (${props.length}):`);
+      for (const prop of props) {
+        const defaultMark = prop.hasDefault ? " = ..." : "";
+        lines.push(`- \`@${prop.decorator}\` \`${prop.name}\`: \`${prop.type}\`${defaultMark}`);
       }
     }
   }

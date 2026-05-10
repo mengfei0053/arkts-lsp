@@ -32,7 +32,7 @@ interface FieldDecoratorEntry {
   node: ArkTSNode;
 }
 
-function collectFieldDecorators(tree: ArkTSTree): FieldDecoratorEntry[] {
+export function collectFieldDecorators(tree: ArkTSTree): FieldDecoratorEntry[] {
   const results: FieldDecoratorEntry[] = [];
   const structs = getStructDeclarations(tree);
 
