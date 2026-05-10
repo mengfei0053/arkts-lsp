@@ -1,6 +1,7 @@
 import { Location, Position } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { CallContext, EnclosingTypeContext, ImportBinding, ImportContext, MemberAccessContext, NamedImportContext } from "./types.js";
+import { findNodesByType, parseArkTS } from "./parser.js";
 
 export function collectImportBindings(document: TextDocument): ImportBinding[] {
   const bindings: ImportBinding[] = [];
@@ -177,6 +178,66 @@ export function getMemberAccessContextAtPosition(document: TextDocument, positio
 }
 
 export function getEnclosingTypeContextAtPosition(document: TextDocument, position: Position): EnclosingTypeContext | null {
+  // Parser-first: find the innermost struct/class whose class_body contains the position
+  const parserResult = getEnclosingTypeFromParser(document, position);
+  if (parserResult) {
+    return parserResult;
+  }
+
+  // Fallback: text-based brace counting
+  return getEnclosingTypeFromText(document, position);
+}
+
+export function matchArktsTypeDeclaration(line: string): EnclosingTypeContext | null {
+  const declaration = line.trim().replace(/^(?:@[A-Za-z_]\w*(?:\([^)]*\))?\s+)*/u, "");
+  const declarationMatch = declaration.match(/^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(class|struct)\s+([A-Za-z_]\w*)\b/u);
+  if (!declarationMatch) {
+    return null;
+  }
+
+  return {
+    kind: declarationMatch[1] as "class" | "struct",
+    name: declarationMatch[2],
+  };
+}
+
+function getEnclosingTypeFromParser(document: TextDocument, position: Position): EnclosingTypeContext | null {
+  const tree = parseArkTS(document);
+  if (!tree) {
+    return null;
+  }
+
+  const candidates: Array<{ name: string; kind: "class" | "struct"; startLine: number; endLine: number }> = [];
+
+  for (const nodeType of ["struct_declaration", "class_declaration"] as const) {
+    for (const node of findNodesByType(tree, nodeType)) {
+      const classBody = node.children.find((child) => child.type === "class_body");
+      if (!classBody) {
+        continue;
+      }
+      const name = node.children.find((child) => child.type === "type_identifier")?.text;
+      if (!name) {
+        continue;
+      }
+      const kind = nodeType === "struct_declaration" ? "struct" as const : "class" as const;
+      candidates.push({
+        name,
+        kind,
+        startLine: classBody.startPosition.line,
+        endLine: classBody.endPosition.line,
+      });
+    }
+  }
+
+  // Find the innermost (smallest) type whose class_body contains the position
+  const matching = candidates
+    .filter((candidate) => position.line >= candidate.startLine && position.line <= candidate.endLine)
+    .sort((left, right) => (right.endLine - right.startLine) - (left.endLine - left.startLine));
+
+  return matching[0] ? { name: matching[0].name, kind: matching[0].kind } : null;
+}
+
+function getEnclosingTypeFromText(document: TextDocument, position: Position): EnclosingTypeContext | null {
   const lines = document.getText().split(/\r?\n/u);
   let braceDepth = 0;
   let pendingType: EnclosingTypeContext | null = null;
@@ -212,19 +273,6 @@ export function getEnclosingTypeContextAtPosition(document: TextDocument, positi
 
   const enclosingType = typeStack.at(-1);
   return enclosingType ? { name: enclosingType.name, kind: enclosingType.kind } : null;
-}
-
-export function matchArktsTypeDeclaration(line: string): EnclosingTypeContext | null {
-  const declaration = line.trim().replace(/^(?:@[A-Za-z_]\w*(?:\([^)]*\))?\s+)*/u, "");
-  const declarationMatch = declaration.match(/^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(class|struct)\s+([A-Za-z_]\w*)\b/u);
-  if (!declarationMatch) {
-    return null;
-  }
-
-  return {
-    kind: declarationMatch[1] as "class" | "struct",
-    name: declarationMatch[2],
-  };
 }
 
 export function getCallContextAtPosition(document: TextDocument, position: Position): CallContext | null {

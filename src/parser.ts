@@ -296,8 +296,9 @@ export function getBuildMethodComponentCalls(tree: ArkTSTree, structName: string
 
   const seen = new Set<string>();
   const calls: string[] = [];
-  for (const node of findNodes(buildMethod, (candidate) => candidate.type === "component_statement" || candidate.type === "call_expression")) {
-    const name = findFirstCallName(node);
+  for (const node of findNodes(buildMethod, (candidate) => candidate.type === "component_statement" || candidate.type === "call_expression" || candidate.type === "method_definition")) {
+    const name = findFirstCallName(node)
+      ?? (node.type === "method_definition" ? findChildText(node, "property_identifier") : null);
     if (!name || seen.has(name) || !startsWithUppercase(name)) {
       continue;
     }
@@ -314,10 +315,10 @@ export function getBuildMethodComponentTree(tree: ArkTSTree, structName: string)
     return [];
   }
 
+  // Pattern 1: normal — build method has a statement_block child
   const statementBlock = buildMethod.children.find((child) => child.type === "statement_block");
-  if (!statementBlock) {
-    return [];
-  }
+  // Pattern 2: error-recovery — buildMethod is an object node (from ERROR recovery)
+  const buildBody = statementBlock ?? buildMethod;
 
   const builderFunctions = getBuilderFunctions(tree).filter((item) => item.structName === structName);
   const builderContext = {
@@ -326,7 +327,7 @@ export function getBuildMethodComponentTree(tree: ArkTSTree, structName: string)
     builderFunctionNodes: new Map(builderFunctions.map((item) => [item.name, item.node])),
   };
 
-  return buildComponentTreeFromNode(statementBlock, [], builderContext);
+  return buildComponentTreeFromNode(buildBody, [], builderContext);
 }
 
 function findBuildMethodNode(tree: ArkTSTree, structName: string): ArkTSNode | null {
@@ -336,9 +337,42 @@ function findBuildMethodNode(tree: ArkTSTree, structName: string): ArkTSNode | n
   }
 
   const classBody = struct.node.children.find((child) => child.type === "class_body");
-  return classBody?.children.find(
+  if (!classBody) {
+    return null;
+  }
+
+  // Pattern 1: build() as a direct method_definition child of class_body
+  const directMethod = classBody.children.find(
     (child) => child.type === "method_definition" && findChildText(child, "property_identifier") === "build",
-  ) ?? null;
+  );
+  if (directMethod) {
+    return directMethod;
+  }
+
+  // Pattern 2: error-recovery — build() swallowed into public_field_definition
+  // tree-sitter-arkts merges @State field + build() into one public_field_definition;
+  // build() appears as call_expression inside an ERROR node, and its body as an object sibling
+  for (const field of classBody.children) {
+    if (field.type !== "public_field_definition") {
+      continue;
+    }
+    for (const child of field.children) {
+      if (child.type === "ERROR") {
+        const hasBuildCall = child.children.some(
+          (ec) => ec.type === "call_expression" && findChildText(ec, "identifier") === "build",
+        );
+        if (hasBuildCall) {
+          // The object node following ERROR is the build body
+          const objectBody = field.children.find((sibling) => sibling.type === "object");
+          if (objectBody) {
+            return objectBody;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 function buildComponentTreeFromNode(
@@ -359,6 +393,31 @@ function buildComponentTreeFromNode(
         name,
         path,
         arguments: extractArguments(findChildNode(child, "arguments")),
+        modifiers: [],
+        props: [],
+        builderBindings: [],
+        range: {
+          start: child.startPosition,
+          end: child.endPosition,
+        },
+        children: block ? buildComponentTreeFromNode(block, path, builderContext) : [],
+      });
+      continue;
+    }
+
+    // Error-recovery pattern: UI components appear as method_definition inside object
+    // (tree-sitter-arkts ERROR recovery merges build() body into an object literal)
+    if (child.type === "method_definition") {
+      const name = findChildText(child, "property_identifier");
+      if (!name || !startsWithUppercase(name)) {
+        continue;
+      }
+      const block = child.children.find((entry) => entry.type === "statement_block");
+      const path = [...ancestorPath, name];
+      result.push({
+        name,
+        path,
+        arguments: extractArguments(findChildNode(child, "formal_parameters") ?? findChildNode(child, "arguments")),
         modifiers: [],
         props: [],
         builderBindings: [],

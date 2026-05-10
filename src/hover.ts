@@ -1,8 +1,8 @@
 import { Hover, Position } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { resolveLinkedReferenceTarget } from "./navigation.js";
-import { ArkTSNode, findNodesByType, getDecoratorNames, parseArkTS } from "./parser.js";
-import { escapeMarkdown, getImportBindingAtPosition, getWordAtPosition } from "./text.js";
+import { ArkTSNode, findNodesByType, getBuildMethodComponentTree, getDecoratorNames, getStructDeclarations, parseArkTS } from "./parser.js";
+import { escapeMarkdown, getEnclosingTypeContextAtPosition, getImportBindingAtPosition, getWordAtPosition } from "./text.js";
 import { collectDocumentSymbols, displayDocumentName, findDocumentMemberSymbolAtPosition, symbolKindLabel, typeMemberLabel } from "./symbols.js";
 
 export function buildHover(document: TextDocument, position: Position): Hover | null {
@@ -24,6 +24,11 @@ export function buildHover(document: TextDocument, position: Position): Hover | 
         ].join("\n"),
       },
     };
+  }
+
+  const componentTreeHover = buildComponentTreeHover(document, position);
+  if (componentTreeHover) {
+    return componentTreeHover;
   }
 
   const decoratedDeclarationHover = buildDecoratedDeclarationHover(document, position);
@@ -281,4 +286,88 @@ function isWithinRange(position: Position, start: { line: number; character: num
 
 function singleLine(text: string): string {
   return text.replace(/\s+/gu, " ").trim();
+}
+
+function buildComponentTreeHover(document: TextDocument, position: Position): Hover | null {
+  const tree = parseArkTS(document);
+  if (!tree) {
+    return null;
+  }
+
+  const enclosingType = getEnclosingTypeContextAtPosition(document, position);
+  if (!enclosingType) {
+    return null;
+  }
+
+  const componentTree = getBuildMethodComponentTree(tree, enclosingType.name);
+  if (componentTree.length === 0) {
+    return null;
+  }
+
+  // Find the tree node at the hover position
+  const node = findTreeNodeAtPosition(componentTree, position);
+  if (!node) {
+    return null;
+  }
+
+  const lines: string[] = [
+    `### UI Component \`${node.name}\``,
+    "",
+    `In \`${enclosingType.name}.build()\``,
+  ];
+
+  if (node.path.length > 1) {
+    lines.push("", `Path: \`${node.path.join(" → ")}\``);
+  }
+
+  if (node.children.length > 0) {
+    lines.push("", `Children: ${node.children.map((child) => `\`${child.name}\``).join(", ")}`);
+  }
+
+  if (node.slots && node.slots.length > 0) {
+    for (const slot of node.slots) {
+      lines.push("", `Slot \`${slot.propName}\`: \`${slot.source}\` → \`${slot.targetName}\` (${slot.sourceKind})`);
+    }
+  }
+
+  if (node.builderBindings && node.builderBindings.length > 0) {
+    for (const binding of node.builderBindings) {
+      if (binding.propName !== "call") {
+        lines.push("", `Prop \`${binding.propName}\`: \`${binding.source}\` (${binding.sourceKind})`);
+      }
+    }
+  }
+
+  return {
+    contents: {
+      kind: "markdown",
+      value: lines.join("\n"),
+    },
+  };
+}
+
+function findTreeNodeAtPosition(
+  nodes: Array<{
+    name: string;
+    path: string[];
+    range: { start: { line: number; character: number }; end: { line: number; character: number } };
+    children: any[];
+    slots?: any[];
+    builderBindings?: any[];
+  }>,
+  position: Position,
+): typeof nodes[number] | null {
+  for (const node of nodes) {
+    if (
+      position.line >= node.range.start.line &&
+      position.line <= node.range.end.line &&
+      (position.line !== node.range.start.line || position.character >= node.range.start.character) &&
+      (position.line !== node.range.end.line || position.character <= node.range.end.character)
+    ) {
+      // Check children first (innermost match)
+      const childMatch = findTreeNodeAtPosition(node.children, position);
+      return childMatch ?? node;
+    }
+  }
+  return null;
 }
