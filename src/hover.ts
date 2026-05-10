@@ -1,7 +1,7 @@
 import { Hover, Position } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { resolveLinkedReferenceTarget } from "./navigation.js";
-import { ArkTSNode, findNodesByType, getBuildMethodComponentTree, getDecoratorNames, getStructDeclarations, parseArkTS } from "./parser.js";
+import { ArkTSNode, findNodesByType, getBuildMethodComponentTree, getDecoratorNames, getStructDeclarations, getWatchDecorators, parseArkTS } from "./parser.js";
 import { escapeMarkdown, getEnclosingTypeContextAtPosition, getImportBindingAtPosition, getWordAtPosition } from "./text.js";
 import { collectDocumentSymbols, displayDocumentName, findDocumentMemberSymbolAtPosition, symbolKindLabel, typeMemberLabel } from "./symbols.js";
 
@@ -29,6 +29,11 @@ export function buildHover(document: TextDocument, position: Position): Hover | 
   const componentTreeHover = buildComponentTreeHover(document, position);
   if (componentTreeHover) {
     return componentTreeHover;
+  }
+
+  const watchHover = buildWatchDecoratorHover(document, position);
+  if (watchHover) {
+    return watchHover;
   }
 
   const decoratedDeclarationHover = buildDecoratedDeclarationHover(document, position);
@@ -145,16 +150,38 @@ function buildMemberDecoratorDetails(
   }
 
   const details = ["", `Decorator: \`@${member.decorator}\``];
-  if (member.decorator === "Provide") {
-    details.push("", "This field acts as a **provider** for descendant components.");
+
+  switch (member.decorator) {
+    case "State":
+      details.push("", "Reactive state — UI re-renders when this value changes.");
+      break;
+    case "Prop":
+      details.push("", "One-way data binding — receives value from parent component.");
+      break;
+    case "Link":
+      details.push("", "Two-way data binding — syncs value with parent `@State`.");
+      break;
+    case "Provide":
+      details.push("", "This field acts as a **provider** for descendant components.");
+      break;
+    case "Consume":
+      details.push("", "This field acts as a **consumer** of a provided value.");
+      break;
+    case "ObjectLink": {
+      const observedHint = findObservedClassHint(document, member.declarationText);
+      details.push("", observedHint ?? "This field links to an **Observed** object for reactive updates.");
+      break;
+    }
+    case "Watch":
+      details.push("", "Observes changes on the decorated field and invokes the named callback.");
+      break;
+    case "Track":
+      details.push("", "Marks this field for **fine-grained** reactivity — only re-renders when this specific property changes.");
+      break;
+    default:
+      break;
   }
-  if (member.decorator === "Consume") {
-    details.push("", "This field acts as a **consumer** of a provided value.");
-  }
-  if (member.decorator === "ObjectLink") {
-    const observedHint = findObservedClassHint(document, member.declarationText);
-    details.push("", observedHint ?? "This field links to an **Observed** object for reactive updates.");
-  }
+
   return details;
 }
 
@@ -369,5 +396,41 @@ function findTreeNodeAtPosition(
       return childMatch ?? node;
     }
   }
+  return null;
+}
+
+function buildWatchDecoratorHover(document: TextDocument, position: Position): Hover | null {
+  const tree = parseArkTS(document);
+  if (!tree) {
+    return null;
+  }
+
+  // Check if position is within any @Watch decorator node
+  const watches = getWatchDecorators(tree);
+  for (const watch of watches) {
+    const node = watch.node;
+    if (
+      position.line >= node.startPosition.line &&
+      position.line <= node.endPosition.line &&
+      (position.line !== node.startPosition.line || position.character >= node.startPosition.character) &&
+      (position.line !== node.endPosition.line || position.character <= node.endPosition.character)
+    ) {
+      const lines = [
+        `### Decorator \`@Watch\``,
+        "",
+        `Observes **\`${watch.fieldName}\`** and invokes \`${watch.callbackName}()\` on change.`,
+        "",
+        `In \`${watch.structName}\``,
+      ];
+
+      return {
+        contents: {
+          kind: "markdown",
+          value: lines.join("\n"),
+        },
+      };
+    }
+  }
+
   return null;
 }

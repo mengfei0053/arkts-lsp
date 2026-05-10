@@ -107,6 +107,22 @@ export type BuildMethodComponentTreeNode = {
   children: BuildMethodComponentTreeNode[];
 };
 
+export type WatchDecoratorInfo = {
+  callbackName: string;
+  fieldName: string;
+  structName: string;
+  line: number;
+  node: ArkTSNode;
+};
+
+export type DecoratorCallInfo = {
+  name: string;
+  arguments: string[];
+  fieldName: string;
+  structName: string;
+  line: number;
+};
+
 const parser = new Parser();
 parser.setLanguage(ArkTSModule.ArkTS);
 
@@ -167,13 +183,77 @@ export function getDecoratorNames(node: ArkTSNode): string[] {
 }
 
 export function getStructDeclarations(tree: ArkTSTree): StructDeclarationInfo[] {
-  return findNodesByType(tree, "struct_declaration").map((node) => ({
+  // Normal path: direct struct_declaration nodes
+  const directResults = findNodesByType(tree, "struct_declaration").map((node) => ({
     name: findChildText(node, "type_identifier") ?? "",
     decorators: getDecoratorNames(node),
     exported: isExportedNode(node),
     line: node.startPosition.line,
     node,
   }));
+
+  if (directResults.length > 0) {
+    return directResults;
+  }
+
+  // Recovery path: struct declaration may be buried inside ERROR nodes
+  // When tree-sitter-arkts triggers heavy ERROR recovery, struct names may
+  // appear as "identifier" nodes rather than "type_identifier"
+  const results: StructDeclarationInfo[] = [];
+
+  // Search both type_identifier and identifier nodes
+  const candidateNodes = [
+    ...findNodesByType(tree, "type_identifier"),
+    ...findNodesByType(tree, "identifier"),
+  ];
+
+  for (const ident of candidateNodes) {
+    // Check if this identifier appears after "struct" keyword in source
+    const sourceLine = tree.document.getText().split(/\r?\n/u)[ident.startPosition.line] ?? "";
+    const beforeIdent = sourceLine.slice(0, ident.startPosition.character).trimEnd();
+    if (!beforeIdent.endsWith("struct")) {
+      continue;
+    }
+
+    // Avoid duplicate: skip if already found with same name at same line
+    if (results.some((r) => r.name === ident.text && r.line === ident.startPosition.line)) {
+      continue;
+    }
+
+    // Find the enclosing node (might be ERROR)
+    let enclosingNode: ArkTSNode | null = ident.parent;
+    while (enclosingNode && enclosingNode.type !== "struct_declaration" && enclosingNode !== tree.rootNode) {
+      enclosingNode = enclosingNode.parent;
+    }
+
+    const name = ident.text;
+    const decorators: string[] = [];
+
+    // Collect leading decorators from the enclosing node or its siblings
+    if (enclosingNode) {
+      for (const child of enclosingNode.children) {
+        if (child === ident || child.startPosition.line > ident.startPosition.line) {
+          break;
+        }
+        if (child.type === "decorator") {
+          const decoName = child.children.find((c) => c.type === "identifier")?.text;
+          if (decoName) {
+            decorators.push(decoName);
+          }
+        }
+      }
+    }
+
+    results.push({
+      name,
+      decorators,
+      exported: false,
+      line: ident.startPosition.line,
+      node: enclosingNode ?? ident,
+    });
+  }
+
+  return results;
 }
 
 export function getBuilderFunctions(tree: ArkTSTree): BuilderFunctionInfo[] {
@@ -196,6 +276,183 @@ export function getBuilderParamFields(tree: ArkTSTree): BuilderParamFieldInfo[] 
       structName: findAncestorName(node, "struct_declaration", "type_identifier"),
       node,
     }));
+}
+
+export function getWatchDecorators(tree: ArkTSTree): WatchDecoratorInfo[] {
+  const results: WatchDecoratorInfo[] = [];
+  const structs = getStructDeclarations(tree);
+
+  // Helper: find struct name containing a given line
+  const findStructNameAtLine = (line: number): string => {
+    for (const struct of structs) {
+      if (line >= struct.line && line <= struct.node.endPosition.line) {
+        return struct.name;
+      }
+    }
+    return "";
+  };
+
+  // Pattern 1: decorator inside public_field_definition (normal parse)
+  const fields = findNodesByType(tree, "public_field_definition");
+  for (const field of fields) {
+    const fieldName = findChildText(field, "property_identifier");
+    if (!fieldName) {
+      continue;
+    }
+
+    const structName = findAncestorName(field, "struct_declaration", "type_identifier")
+      ?? findAncestorName(field, "class_declaration", "type_identifier")
+      ?? findStructNameAtLine(field.startPosition.line);
+
+    for (const child of field.children) {
+      if (child.type !== "decorator") {
+        continue;
+      }
+      const watchInfo = extractWatchFromDecorator(child);
+      if (watchInfo) {
+        results.push({
+          ...watchInfo,
+          fieldName,
+          structName: structName ?? "",
+        });
+      }
+    }
+  }
+
+  // Pattern 2: ERROR recovery — decorator + property_identifier are siblings under ERROR
+  const errorNodes = findNodesByType(tree, "ERROR");
+  for (const errorNode of errorNodes) {
+    const decoratorNodes = errorNode.children.filter((c) => c.type === "decorator");
+    for (const deco of decoratorNodes) {
+      const watchInfo = extractWatchFromDecorator(deco);
+      if (!watchInfo) {
+        continue;
+      }
+      // Find the closest property_identifier sibling (field name)
+      const decoIndex = errorNode.children.indexOf(deco);
+      let fieldName = "";
+      for (let i = decoIndex + 1; i < errorNode.children.length; i += 1) {
+        const sibling = errorNode.children[i];
+        if (sibling.type === "property_identifier") {
+          fieldName = sibling.text;
+          break;
+        }
+      }
+      // Also check the parent's children (decorator may be before a separate field)
+      if (!fieldName && errorNode.parent) {
+        const parentIndex = errorNode.parent.children.indexOf(errorNode);
+        for (let i = parentIndex + 1; i < errorNode.parent.children.length; i += 1) {
+          const sibling = errorNode.parent.children[i];
+          if (sibling.type === "property_identifier") {
+            fieldName = sibling.text;
+            break;
+          }
+          if (sibling.type === "public_field_definition") {
+            fieldName = findChildText(sibling, "property_identifier") ?? "";
+            break;
+          }
+          if (sibling.type === "decorator") {
+            break;
+          }
+        }
+      }
+      if (!fieldName) {
+        continue;
+      }
+
+      const structName = findAncestorName(errorNode, "struct_declaration", "type_identifier")
+        ?? findAncestorName(errorNode, "class_declaration", "type_identifier")
+        ?? findStructNameAtLine(deco.startPosition.line);
+
+      // Avoid duplicates with Pattern 1
+      const isDup = results.some(
+        (r) => r.callbackName === watchInfo.callbackName && r.fieldName === fieldName,
+      );
+      if (!isDup) {
+        results.push({
+          ...watchInfo,
+          fieldName,
+          structName: structName ?? "",
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+function extractWatchFromDecorator(
+  deco: ArkTSNode,
+  fieldName?: string,
+  structName?: string,
+): Omit<WatchDecoratorInfo, "fieldName" | "structName"> | null {
+  const callExpr = deco.children.find((c) => c.type === "call_expression");
+  if (!callExpr) {
+    return null;
+  }
+  const decoratorName = findChildText(callExpr, "identifier");
+  if (decoratorName !== "Watch") {
+    return null;
+  }
+
+  const argsNode = findChildNode(callExpr, "arguments");
+  const callbackName = extractFirstStringArgument(argsNode);
+  if (!callbackName) {
+    return null;
+  }
+
+  return {
+    callbackName,
+    line: deco.startPosition.line,
+    node: deco,
+  };
+}
+
+export function getDecoratorInfo(tree: ArkTSTree): DecoratorCallInfo[] {
+  const results: DecoratorCallInfo[] = [];
+  const fields = findNodesByType(tree, "public_field_definition");
+
+  for (const field of fields) {
+    const fieldName = findChildText(field, "property_identifier");
+    if (!fieldName) {
+      continue;
+    }
+
+    const structName = findAncestorName(field, "struct_declaration", "type_identifier")
+      ?? findAncestorName(field, "class_declaration", "type_identifier");
+
+    for (const child of field.children) {
+      if (child.type !== "decorator") {
+        continue;
+      }
+      const callExpr = child.children.find((c) => c.type === "call_expression");
+      if (!callExpr) {
+        continue;
+      }
+
+      const decoratorName = findChildText(callExpr, "identifier");
+      if (!decoratorName) {
+        continue;
+      }
+
+      const argsNode = findChildNode(callExpr, "arguments");
+      const args = argsNode
+        ? argsNode.children
+            .filter((c) => c.type === "string")
+            .map((c) => c.children.find((sc) => sc.type === "string_fragment")?.text ?? c.text)
+        : [];
+
+      results.push({
+        name: decoratorName,
+        arguments: args,
+        fieldName,
+        structName: structName ?? "",
+        line: child.startPosition.line,
+      });
+    }
+  }
+
+  return results;
 }
 
 export function getClassBodyMembers(tree: ArkTSTree, struct: StructDeclarationInfo): { fields: MemberInfo[]; methods: MemberInfo[] } {
@@ -773,4 +1030,16 @@ function getTopLevelEntries(root: ArkTSNode): Array<{ node: ArkTSNode; exported:
   }
 
   return entries;
+}
+
+function extractFirstStringArgument(argsNode: ArkTSNode | undefined): string | null {
+  if (!argsNode) {
+    return null;
+  }
+  const stringNode = argsNode.children.find((child) => child.type === "string");
+  if (!stringNode) {
+    return null;
+  }
+  const fragment = stringNode.children.find((child) => child.type === "string_fragment");
+  return fragment?.text ?? null;
 }
