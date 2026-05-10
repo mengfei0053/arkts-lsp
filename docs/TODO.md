@@ -27,6 +27,16 @@
 - **选择范围**：标识符、语句、代码块的层级选择
 - **项目上下文**：工程根识别、`.ets` / `.ts` 扫描、项目级文档加载
 - **opencode 集成**：全局 / 项目配置示例与启动脚本
+- **Code Lens**：struct 声明上方展示组件类型标签 + props 数量 + 子组件树概览
+- **增量解析缓存**：parseCache (uri, version, contentHash) 三级缓存 + raw Tree 保留支持 `parseArkTSIncremental()`
+- **工作区符号索引**：`workspace-indexer.ts`，启动预索引 + 生命周期增量更新 + `findSymbolInWorkspace()`
+- **V2 装饰器全量支持**：10 个 V2 装饰器 parser/hover/diagnostics 三层完整支持
+- **V2 约束校验**：V1/V2 混用、@Param/@Event 作用域、@Computed getter、@Trace 作用域
+- **组件子树语义**：@Builder/@BuilderParam slot-like 建模，range 锚定宿主，显式 slot 元数据
+- **跨文件组件解析**：`component-resolver.ts`，import 绑定 → @Component/@ComponentV2 struct
+- **组件 props 提取**：`component-props.ts`，@Prop/@Link/@Param/@Event + 默认值检测
+- **组件调用 props 诊断**：`prop-diagnostics.ts`，未知 prop Warning + 缺少必传 prop Hint
+- **跨文件 @Builder 追踪**：`builder-resolver.ts`，全局 function + struct method，definition+hover 接入
 
 ## 🟡 部分完成 / 仍需增强
 
@@ -38,7 +48,7 @@
 | **References** | 已支持 `@Provide/@Consume` 的跨文档联动引用；其它场景仍以文本级搜索为主 | 真正的项目级引用图 |
 | **Rename** | 已支持 `@Provide/@Consume` 的跨文档联动重命名；其它场景仍以文本替换为主 | 带作用域分析与冲突检查的安全重命名 |
 | **Completion** | 正则 + 工作区索引 + 命名导入导出，已加入 `build()` 内 UI 组件上下文补全，并开始复用组件树分析结果与组件路径上下文 | AST 感知、上下文敏感补全 |
-| **Diagnostics** | 已对 `any` 诊断引入 AST，减少文本误报 | ArkTS 专项诊断（类型错误、装饰器误用等） |
+| **Diagnostics** | `any` 警告 + @Watch 回调校验 + @Monitor 回调/字段校验 + @Provider/@Consumer 键名匹配 + V2 约束（V1/V2 混用/@Param/@Event 作用域/@Computed getter/@Trace 作用域）+ 组件调用 props 诊断（未知/缺失） | 更完整的类型级诊断、ArkTS 样式约束 |
 | **Semantic Tokens** | 词法 + 正则分类 | 类型驱动的 token / modifier |
 | **Hover** | 基于声明文本的悬停，已加入 `@Builder`、`@Provide/@Consume/@ObjectLink/@Observed` 的增强语义与基础观察链提示 | 类型签名、JSDoc、更丰富的装饰器元数据 |
 | **Inlay Hints** | 仅参数名提示 | 类型推断、隐式返回类型、链式调用参数提示 |
@@ -50,10 +60,11 @@
 以下能力仍未完成，或只做了非常早期的占位：
 
 ### ArkTS 专属能力
-- [ ] **Tree-sitter 运行时接管** —— 解析器适配层已完成，且已开始接入 `symbols.ts`、`navigation.ts`、`completion.ts`、`diagnostics.ts`，但仍未全面 AST 化
-- [x] **`@Builder` / `@BuilderParam`** —— 已完成基础 hover / completion / navigation
-- [ ] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover；`@Provide/@Consume` 已支持 `@Consume -> @Provide` 的基础 definition 配对，以及 provider/consumer 双向 references / rename 联动；`@ObjectLink` 已支持跳转到匹配的 `@Observed` 类型定义，且 `@ObjectLink` 与 `@Observed` 已支持双向 references 联动；从 `@Observed` 声明发起的 rename 也已能联动匹配的 `@ObjectLink` 类型标注；但 `@Observed/@ObjectLink` 观察链仍未完全建模
-- [ ] **`build()` 方法分析** —— 已能提取 UI 组件调用、嵌套组件树，并给组件树节点附加源码 range、组件路径（path）、实参（arguments）、链式修饰器（modifiers）、结构化 props、基础 `@Builder` 绑定关系，以及组件块内直接本地 `@Builder` 调用的子节点表示与本地 `@Builder` 体展开，并可把组件 modifier 上绑定的本地 `@Builder` / `@BuilderParam` 映射成 slot-like 子节点；其中本地 `@Builder` 支持体展开，`@BuilderParam` 仅保留占位子节点，且占位子节点的 range 已锚定到宿主组件调用范围，同时本地 `@Builder` slot-like 子节点的 range 也已锚定到宿主组件调用范围，并开始显式记录 slot 元数据（prop/source/sourceKind/targetName），宿主组件节点已可显式暴露 slots 列表；但尚未构建完整组件语义模型（如 slot/builder 作用域关系、跨组件 props 归类等）
+- [x] **Tree-sitter 运行时接管** —— 解析器适配层已完成，且已接入 `symbols.ts`、`navigation.ts`、`completion.ts`、`diagnostics.ts`、`hover.ts`
+- [x] **`@Builder` / `@BuilderParam`** —— 已完成单文件 slot 建模 + 跨文件追踪（`builder-resolver.ts`）
+- [x] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover + definition 配对 + references/rename 联动；观察链（`observed-links.ts`）基础建模已完成
+- [x] **`build()` 方法分析** —— 组件树（含 props/slots/modifiers）、slot 元数据、宿主 slots 列表已完成
+- [x] **V2 装饰器** —— 10 个 V2 装饰器（@Local/@Param/@Event/@Provider/@Consumer/@Monitor/@Computed/@Trace/@ComponentV2/@ObservedV2）parser/hover/diagnostics 全量支持 + 约束校验
 - [ ] **ArkTS 类型系统感知** —— 联合类型、可选链、类型守卫等尚未建模
 - [ ] **HarmonyOS API 面增强** —— 目前不是 SDK 驱动，也没有完整签名库
 - [x] **ETS 模块解析（最小版）** —— 已支持 `@kit.*` / `@ohos.*` 的最小解析
@@ -62,13 +73,14 @@
 - [ ] **分层 Document Symbols** —— 当前仍是扁平列表
 - [ ] **Call Hierarchy**
 - [ ] **Type Hierarchy**
-- [ ] **Code Lens**
+- [x] **Code Lens** —— `codelens.ts`，struct 上方显示组件概览
 - [ ] **扩展 Inlay Hints** —— 类型推断、链式调用参数等
 - [ ] **Linked Editing Ranges**
 - [ ] **Moniker**
 
 ### 工程与工具能力
-- [ ] **增量解析缓存** —— 避免每次 `didChange` 触发全量重算
+- [x] **增量解析缓存** —— parseCache 三级校验 + raw Tree 保留 + `parseArkTSIncremental()`
+- [x] **工作区符号索引** —— `workspace-indexer.ts`，启动预索引 + 生命周期增量
 - [ ] **文件监听服务** —— 跨文件变化自动刷新项目上下文
 - [ ] **Workspace 配置支持** —— `workspace/configuration` 与 feature flags
 - [ ] **进度上报** —— `$/progress` 用于初始扫描与重建索引
@@ -86,20 +98,22 @@
 
 ## 📌 下一步建议优先级
 
-### 本轮冲刺（建议优先尽量做完）
-1. **`build()` 组件语义补全**：在现有组件树上继续补 `slot` / `@BuilderParam` / builder 作用域关系，并把结构化 props 用到补全/悬停上下文里
-2. **`@Observed/@ObjectLink` 观察链建模**：从仅 hover 提示升级到 definition / references 级别的项目级语义
-3. **解析器主链接管收尾**：继续把 `navigation.ts` / `completion.ts` / `hover.ts` 中残余文本启发式切到 parser helper
+### 已完成（本轮冲刺 P0-P3）
+1. ✅ **`build()` 组件语义补全**：slot / @BuilderParam / builder 作用域，结构化 props，组件树
+2. ✅ **`@Observed/@ObjectLink` 观察链建模**：`observed-links.ts`，双向 references/rename
+3. ✅ **解析器主链接管收尾**：navigation/completion/hover/diagnostics 已全面切入 parser
+4. ✅ **V2 装饰器全量支持**：10 个装饰器 parser/hover/diagnostics + 约束校验
+5. ✅ **跨文件组件/builder 解析**：component-resolver + builder-resolver
+6. ✅ **组件调用 props 诊断**：prop-diagnostics.ts
+7. ✅ **增量解析 + 缓存**：parseCache + raw Tree + parseArkTSIncremental
+8. ✅ **工作区索引**：workspace-indexer.ts
+9. ✅ **Code Lens**：codelens.ts
 
-### P1
-4. **增量解析 + watcher**
-5. **workspace/configuration + feature flags**
-6. **HarmonyOS API 感知增强（SDK / 更完整签名）**
-
-### P2
-7. **ArkTS 类型系统感知**：联合类型、可选链、类型守卫等 AST 建模
-8. **分层符号 / 调用层级 / 类型层级**
-9. **Code Lens / 扩展 Inlay Hints / Linked Editing**
-
-### P3
-10. **真实项目集成测试 / 性能基准 / 进度上报 / Moniker**
+### 下一轮建议（P4+）
+1. **ArkTS 类型系统感知**：联合类型、可选链、类型守卫等 AST 建模
+2. **分层 Document Symbols**：替代扁平符号列表
+3. **Call Hierarchy / Type Hierarchy**
+4. **扩展 Inlay Hints**：类型推断、链式调用
+5. **HarmonyOS API 感知增强**：SDK 驱动 + 完整签名
+6. **文件监听 + workspace/configuration**
+7. **真实项目集成测试 + 性能基准**
