@@ -12,3 +12,4 @@ export * from "./selection-range.js";
 export * from "./code-action.js";
 export * from "./semantic-tokens.js";
 export * from "./server-capabilities.js";
+export * from "./codelens.js";

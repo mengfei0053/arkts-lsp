@@ -1,5 +1,6 @@
 import {
   CodeAction,
+  CodeLens,
   CompletionItem,
   createConnection,
   DidChangeConfigurationNotification,
@@ -19,6 +20,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { TextDocuments } from "vscode-languageserver";
 import {
+  buildCodeLenses,
   buildFoldingRanges,
   buildImportCompletionItems,
   buildClassMemberCompletionItems,
@@ -211,6 +213,14 @@ connection.onFoldingRanges(({ textDocument }): FoldingRange[] => {
     return [];
   }
   return buildFoldingRanges(document);
+});
+
+connection.onCodeLens((params): CodeLens[] => {
+  const document = loadDocumentFromUri(params.textDocument.uri, documents.all());
+  if (!document) {
+    return [];
+  }
+  return buildCodeLenses(document, params);
 });
 
 connection.languages.inlayHint.on(({ textDocument, range }): InlayHint[] => {

@@ -20,6 +20,7 @@ export function buildServerCapabilities(): InitializeResult["capabilities"] {
     selectionRangeProvider: true,
     inlayHintProvider: true,
     codeActionProvider: true,
+    codeLensProvider: {},
     semanticTokensProvider: {
       legend: semanticTokenLegend,
       full: true,
