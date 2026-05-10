@@ -10,6 +10,7 @@ import {
   parseArkTS,
 } from "./parser.js";
 import { ServerSettings } from "./types.js";
+import { validateComputedGetter, validateTraceScope, validateV1V2Mixing, validateV2OnlyDecoratorScope } from "./v2-diagnostics.js";
 
 export function collectDiagnostics(textDocument: TextDocument, settings: ServerSettings): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
@@ -60,6 +61,12 @@ export function collectDiagnostics(textDocument: TextDocument, settings: ServerS
 
     // Validate @Provider/@Consumer key matching
     validateProviderConsumerKeys(tree, diagnostics, settings.maxNumberOfProblems);
+
+    // Validate V2 constraint rules
+    validateV1V2Mixing(tree, diagnostics, settings.maxNumberOfProblems);
+    validateV2OnlyDecoratorScope(tree, diagnostics, settings.maxNumberOfProblems);
+    validateComputedGetter(tree, diagnostics, settings.maxNumberOfProblems);
+    validateTraceScope(tree, diagnostics, settings.maxNumberOfProblems);
   }
 
   return diagnostics;
