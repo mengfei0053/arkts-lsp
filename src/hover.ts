@@ -4,6 +4,7 @@ import { resolveLinkedReferenceTarget } from "./navigation.js";
 import { ArkTSNode, findNodesByType, getBuildMethodComponentTree, getDecoratorNames, getDecoratorInfo, getMonitorDecorators, getProviderConsumerPairs, getComputedMethods, getStructDeclarations, getWatchDecorators, parseArkTS } from "./parser.js";
 import { escapeMarkdown, getEnclosingTypeContextAtPosition, getImportBindingAtPosition, getWordAtPosition } from "./text.js";
 import { collectDocumentSymbols, displayDocumentName, findDocumentMemberSymbolAtPosition, symbolKindLabel, typeMemberLabel } from "./symbols.js";
+import { lookupImportedComponent, resolveImportedComponents } from "./component-resolver.js";
 
 export function buildHover(document: TextDocument, position: Position): Hover | null {
   // Check decorator-specific hovers first (precise position matching on decorator nodes)
@@ -151,6 +152,41 @@ export function buildLinkedHover(
         ].join("\n"),
       },
     };
+  }
+
+  // Check if the word at position is an imported component
+  const word = getWordAtPosition(document, position);
+  if (word) {
+    const importedComponents = resolveImportedComponents(document, documents);
+    const imported = lookupImportedComponent(word, importedComponents);
+    if (imported) {
+      const targetDoc = documents.find((d) => d.uri === imported.targetUri);
+      if (targetDoc) {
+        const targetSymbol = collectDocumentSymbols(targetDoc).find((s) => s.name === imported.structName);
+        const declarationText = targetSymbol
+          ? readLine(targetDoc, targetSymbol.location.range.start.line).trim()
+          : null;
+        const decorators = getDecoratorsForNamedTopLevelDeclaration(targetDoc, imported.structName);
+        const lines: string[] = [
+          `### ${imported.isV2 ? "@ComponentV2" : "@Component"} \`${word}\``,
+          "",
+        ];
+        if (imported.localName !== imported.importedName) {
+          lines.push(`Alias of \`${imported.importedName}\` from \`${imported.structName}\``, "");
+        }
+        lines.push(
+          `Defined in \`${displayDocumentName(targetDoc.uri)}\``,
+          "",
+        );
+        if (declarationText) {
+          lines.push(`Declaration: \`${escapeMarkdown(declarationText)}\``);
+        }
+        lines.push(...formatDecoratorDetails(decorators));
+        return {
+          contents: { kind: "markdown", value: lines.join("\n") },
+        };
+      }
+    }
   }
 
   return buildHover(document, position);

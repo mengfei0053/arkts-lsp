@@ -20,6 +20,7 @@ import {
   locationKey,
 } from "./text.js";
 import { DefinitionContext, ImportBinding, LinkedReferenceTarget } from "./types.js";
+import { lookupImportedComponent, resolveImportedComponents } from "./component-resolver.js";
 
 export function findDefinitions({ document, symbols, documents }: DefinitionContext, position: Position): Location[] {
   const member = findDocumentMemberSymbolAtPosition(document, position);
@@ -47,6 +48,22 @@ export function findDefinitions({ document, symbols, documents }: DefinitionCont
   const word = getWordAtPosition(document, position);
   if (!word) {
     return [];
+  }
+
+  // Check if the word is an imported component — resolve to its definition file
+  if (documents && documents.length > 0) {
+    const importedComponents = resolveImportedComponents(document, documents);
+    const imported = lookupImportedComponent(word, importedComponents);
+    if (imported) {
+      const targetDoc = documents.find((d) => d.uri === imported.targetUri);
+      if (targetDoc) {
+        // Find the struct declaration location in the target document
+        const targetSymbol = collectDocumentSymbols(targetDoc).find((s) => s.name === imported.structName);
+        if (targetSymbol) {
+          return [targetSymbol.location];
+        }
+      }
+    }
   }
 
   const matches = symbols.filter((symbol) => symbol.name === word);
