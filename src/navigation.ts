@@ -21,6 +21,7 @@ import {
 } from "./text.js";
 import { DefinitionContext, ImportBinding, LinkedReferenceTarget } from "./types.js";
 import { lookupImportedComponent, resolveImportedComponents } from "./component-resolver.js";
+import { lookupImportedBuilder, resolveImportedBuilders } from "./builder-resolver.js";
 
 export function findDefinitions({ document, symbols, documents }: DefinitionContext, position: Position): Location[] {
   const member = findDocumentMemberSymbolAtPosition(document, position);
@@ -62,6 +63,21 @@ export function findDefinitions({ document, symbols, documents }: DefinitionCont
         if (targetSymbol) {
           return [targetSymbol.location];
         }
+      }
+    }
+
+    // Check if the word is an imported @Builder function — resolve to its definition file
+    const importedBuilders = resolveImportedBuilders(document, documents);
+    const importedBuilder = lookupImportedBuilder(word, importedBuilders);
+    if (importedBuilder) {
+      const targetDoc = documents.find((d) => d.uri === importedBuilder.targetUri);
+      if (targetDoc) {
+        const targetSymbol = collectDocumentSymbols(targetDoc).find((s) => s.name === importedBuilder.importedName);
+        if (targetSymbol) {
+          return [targetSymbol.location];
+        }
+        // Fallback: return position at the target line
+        return [{ uri: importedBuilder.targetUri, range: { start: { line: importedBuilder.targetLine, character: 0 }, end: { line: importedBuilder.targetLine, character: 0 } } }];
       }
     }
   }

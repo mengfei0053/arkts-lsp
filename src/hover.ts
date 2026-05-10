@@ -5,6 +5,7 @@ import { ArkTSNode, findNodesByType, getBuildMethodComponentTree, getDecoratorNa
 import { escapeMarkdown, getEnclosingTypeContextAtPosition, getImportBindingAtPosition, getWordAtPosition } from "./text.js";
 import { collectDocumentSymbols, displayDocumentName, findDocumentMemberSymbolAtPosition, symbolKindLabel, typeMemberLabel } from "./symbols.js";
 import { lookupImportedComponent, resolveImportedComponents } from "./component-resolver.js";
+import { lookupImportedBuilder, resolveImportedBuilders } from "./builder-resolver.js";
 import { getComponentProps } from "./component-props.js";
 
 export function buildHover(document: TextDocument, position: Position): Hover | null {
@@ -198,6 +199,32 @@ export function buildLinkedHover(
           contents: { kind: "markdown", value: lines.join("\n") },
         };
       }
+    }
+
+    // Check if the word at position is an imported @Builder function
+    const importedBuilders = resolveImportedBuilders(document, documents);
+    const importedBuilder = lookupImportedBuilder(word, importedBuilders);
+    if (importedBuilder) {
+      const lines: string[] = [
+        `### @Builder \`${word}\``,
+        "",
+      ];
+      if (importedBuilder.localName !== importedBuilder.importedName) {
+        lines.push(`Alias of \`${importedBuilder.importedName}\``, "");
+      }
+      if (importedBuilder.isGlobal) {
+        lines.push("Global builder function");
+      } else if (importedBuilder.structName) {
+        lines.push(`Member of \`${importedBuilder.structName}\``);
+      }
+      lines.push(`Defined in \`${displayDocumentName(importedBuilder.targetUri)}\``);
+      if (importedBuilder.parameters.length > 0) {
+        lines.push("", `**Parameters**: \`${importedBuilder.parameters.join("`, `")}\``);
+      }
+
+      return {
+        contents: { kind: "markdown", value: lines.join("\n") },
+      };
     }
   }
 

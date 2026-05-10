@@ -329,7 +329,8 @@ export function getStructDeclarations(tree: ArkTSTree): StructDeclarationInfo[] 
 }
 
 export function getBuilderFunctions(tree: ArkTSTree): BuilderFunctionInfo[] {
-  return findNodesByType(tree, "method_definition")
+  // 1) @Builder methods inside structs (method_definition)
+  const methodBuilders = findNodesByType(tree, "method_definition")
     .filter((node) => getDecoratorNames(node).includes("Builder"))
     .map((node) => ({
       name: findChildText(node, "property_identifier") ?? "",
@@ -337,6 +338,22 @@ export function getBuilderFunctions(tree: ArkTSTree): BuilderFunctionInfo[] {
       structName: findAncestorName(node, "struct_declaration", "type_identifier"),
       node,
     }));
+
+  // 2) Global @Builder functions (function_declaration — may be inside export_statement)
+  const funcBuilders = findNodesByType(tree, "function_declaration")
+    .filter((node) => {
+      // Check if the function or its parent (export_statement) has @Builder decorator
+      return getDecoratorNames(node).includes("Builder") ||
+        (node.parent?.type === "export_statement" && getDecoratorNames(node.parent).includes("Builder"));
+    })
+    .map((node) => ({
+      name: findChildText(node, "identifier") ?? "",
+      line: node.startPosition.line,
+      structName: "", // global — no enclosing struct
+      node,
+    }));
+
+  return [...methodBuilders, ...funcBuilders];
 }
 
 export function getBuilderParamFields(tree: ArkTSTree): BuilderParamFieldInfo[] {
