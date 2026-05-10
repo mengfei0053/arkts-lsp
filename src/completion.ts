@@ -10,6 +10,7 @@ import {
   mapTypeMemberKindToCompletionKind,
 } from "./symbols.js";
 import { collectImportBindings, getMemberAccessContextAtPosition, getNamedImportContextAtPosition } from "./text.js";
+import { collectAvailableComponentNames } from "./component-resolver.js";
 
 type MemberCompletionMode = "static" | "instance";
 
@@ -76,7 +77,7 @@ export function buildCompletionItems(documents: TextDocument[], document: TextDo
     }
   }
 
-  for (const item of buildArkTSBuildContextCompletionItems(document, position, prefix)) {
+  for (const item of buildArkTSBuildContextCompletionItems(document, position, prefix, documents)) {
     if (seen.has(item.label)) {
       continue;
     }
@@ -185,19 +186,43 @@ function buildArkTSBuildContextCompletionItems(
   document: TextDocument,
   position: { line: number; character: number },
   prefix: string,
+  projectDocuments: TextDocument[] = [],
 ): CompletionItem[] {
   if (!isInsideBuildMethod(document, position)) {
     return [];
   }
 
-  return ["Text", "Row", "Column", "Button", "Image", "List", "ForEach"]
-    .filter((label) => !prefix || label.toLowerCase().startsWith(prefix))
-    .map((label) => ({
-      label,
-      kind: CompletionItemKind.Class,
-      detail: "ArkTS UI component",
-      insertText: label,
-    }));
+  const builtinComponents = ["Text", "Row", "Column", "Button", "Image", "List", "ForEach"];
+  const items: CompletionItem[] = [];
+
+  // Built-in UI components
+  for (const label of builtinComponents) {
+    if (!prefix || label.toLowerCase().startsWith(prefix)) {
+      items.push({
+        label,
+        kind: CompletionItemKind.Class,
+        detail: "ArkTS UI component",
+        insertText: label,
+      });
+    }
+  }
+
+  // Imported + local custom components
+  if (projectDocuments.length > 0) {
+    const available = collectAvailableComponentNames(document, projectDocuments);
+    for (const comp of available) {
+      if (!prefix || comp.name.toLowerCase().startsWith(prefix)) {
+        items.push({
+          label: comp.name,
+          kind: CompletionItemKind.Class,
+          detail: comp.source === "imported" ? `Imported ${comp.isV2 ? "@ComponentV2" : "@Component"}` : `Local ${comp.isV2 ? "@ComponentV2" : "@Component"}`,
+          insertText: comp.name,
+        });
+      }
+    }
+  }
+
+  return items;
 }
 
 function isInsideBuildMethod(document: TextDocument, position: { line: number; character: number }): boolean {
