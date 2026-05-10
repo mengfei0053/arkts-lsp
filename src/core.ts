@@ -17,3 +17,4 @@ export * from "./prop-diagnostics.js";
 export * from "./builder-resolver.js";
 export * from "./workspace-indexer.js";
 export * from "./call-hierarchy.js";
+export * from "./type-hierarchy.js";

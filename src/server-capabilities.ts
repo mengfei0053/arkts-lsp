@@ -33,5 +33,6 @@ export function buildServerCapabilities(): InitializeResult["capabilities"] {
       triggerCharacters: ["(", ","],
     },
     callHierarchyProvider: true,
+    typeHierarchyProvider: true,
   };
 }

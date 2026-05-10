@@ -54,6 +54,9 @@ import {
   prepareCallHierarchy,
   incomingCalls,
   outgoingCalls,
+  prepareTypeHierarchy,
+  supertypes,
+  subtypes,
 } from "./core.js";
 import {
   buildProjectContext,
@@ -380,6 +383,27 @@ connection.onRequest("callHierarchy/outgoingCalls" as never, (({
   item,
 }: { item: unknown }) => {
   return outgoingCalls(item as Parameters<typeof outgoingCalls>[0], documents.all());
+}) as never);
+
+// Type Hierarchy
+connection.onRequest("textDocument/prepareTypeHierarchy" as never, (({
+  textDocument, position,
+}: { textDocument: { uri: string }; position: { line: number; character: number } }) => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  if (!document) return [];
+  return prepareTypeHierarchy(document, position);
+}) as never);
+
+connection.onRequest("typeHierarchy/supertypes" as never, (({
+  item,
+}: { item: unknown }) => {
+  return supertypes(item as Parameters<typeof supertypes>[0], documents.all());
+}) as never);
+
+connection.onRequest("typeHierarchy/subtypes" as never, (({
+  item,
+}: { item: unknown }) => {
+  return subtypes(item as Parameters<typeof subtypes>[0], documents.all());
 }) as never);
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
