@@ -65,7 +65,7 @@
 - [x] **`@Provide` / `@Consume` / `@Observed` / `@ObjectLink` 语义** —— 已有增强 hover + definition 配对 + references/rename 联动；观察链（`observed-links.ts`）基础建模已完成
 - [x] **`build()` 方法分析** —— 组件树（含 props/slots/modifiers）、slot 元数据、宿主 slots 列表已完成
 - [x] **V2 装饰器** —— 10 个 V2 装饰器（@Local/@Param/@Event/@Provider/@Consumer/@Monitor/@Computed/@Trace/@ComponentV2/@ObservedV2）parser/hover/diagnostics 全量支持 + 约束校验
-- [ ] **ArkTS 类型系统感知** —— 联合类型、可选链、类型守卫等尚未建模
+- [x] **ArkTS 类型系统感知** —— `type-model.ts` + `type-hover.ts`，联合类型、交叉类型、数组类型、泛型、可为空判定
 - [ ] **HarmonyOS API 面增强** —— 目前不是 SDK 驱动，也没有完整签名库
 - [x] **ETS 模块解析（最小版）** —— 已支持 `@kit.*` / `@ohos.*` 的最小解析
 
@@ -116,8 +116,10 @@
 2. ✅ **Call Hierarchy**：prepareCallHierarchy + incomingCalls + outgoingCalls
 3. ✅ **Type Hierarchy**：prepareTypeHierarchy + supertypes + subtypes
 
+### 已完成（P5-1）
+1. ✅ **ArkTS 类型系统感知**：`type-model.ts` — 联合类型、交叉类型、数组类型、泛型、字面量、类型 annotations 的 AST 解析 + `type-hover.ts` 接入 hover
+
 ### 下一轮建议（P5+）
-1. **ArkTS 类型系统感知**：联合类型、可选链、类型守卫等 AST 建模
 2. **扩展 Inlay Hints**：类型推断、链式调用
 3. **HarmonyOS API 感知增强**：SDK 驱动 + 完整签名
 4. **文件监听 + workspace/configuration**
