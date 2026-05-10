@@ -12,14 +12,14 @@ This file applies to everything under `src/`.
 
 ## Current Focus
 
-- `@State`, `@Prop`, and `@Link` field handling inside ArkTS components.
-- `this.` instance-member completion inside component bodies.
-- Lightweight structural selection support that stays text-based and predictable.
-- Lightweight inlay hints that reuse existing symbol/signature heuristics.
-- Lightweight code actions that reuse existing diagnostics and stay text-based.
-- Lightweight semantic tokens that stay text-based and reuse declaration/context heuristics.
-- Hover, definition, references, rename, and document-link flows that stay aligned with the symbol model.
-- Preserve import/export and linked-reference behavior while refining the heuristics incrementally.
+- P0-P3 phase completed. All V1 (13) and V2 (10) decorators have parser/hover/diagnostics support.
+- V2 constraint diagnostics: V1/V2 mixing, @Param/@Event scope, @Computed getter, @Trace scope.
+- Component tree semantics with @Builder/@BuilderParam slot-like children and ERROR recovery.
+- Cross-file component resolution, props extraction, and call-site props diagnostics.
+- Cross-file @Builder tracking (global functions + struct methods) with navigation/hover.
+- Incremental re-parsing via tree-sitter edit API and raw Tree caching.
+- Workspace symbol index with startup pre-indexing and lifecycle integration.
+- CodeLens provider and parse cache optimizations.
 
 ## Implementation Guidelines
 
@@ -53,3 +53,11 @@ This file applies to everything under `src/`.
 - `signature.ts`: signature help parsing and resolution
 - `project.ts`: ArkTS/HarmonyOS project root detection, source file discovery, project document loading, and relative module resolution
 - `selection-range.ts`: text-based nested selection ranges for identifiers, statements, and brace blocks
+- `observed-links.ts`: @Observed→@ObjectLink reactive observation chain tracking
+- `v2-diagnostics.ts`: V2 decorator constraint validation (V1/V2 mixing, @Param/@Event scope, @Computed getter, @Trace scope) with ERROR-recovery-aware decorator extraction
+- `component-resolver.ts`: cross-file component resolution from import bindings (resolveImportedComponents, lookupImportedComponent, collectAvailableComponentNames)
+- `component-props.ts`: component props extraction (@Prop/@Link/@Param/@Event) with default-value detection
+- `codelens.ts`: CodeLens provider for component overview labels above struct declarations
+- `prop-diagnostics.ts`: component call-site props diagnostics (unknown prop Warning, missing required prop Hint)
+- `builder-resolver.ts`: cross-file @Builder function resolution (global functions + struct methods) with parameter extraction
+- `workspace-indexer.ts`: document-level symbol index with startup pre-indexing and lifecycle-driven incremental updates

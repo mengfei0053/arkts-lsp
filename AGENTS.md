@@ -13,14 +13,16 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 
 ## Current Focus
 
-- Improve ArkTS component ergonomics with lightweight semantic handling for `@State`, `@Prop`, and `@Link`.
-- Improve `this.` instance-member completion inside ArkTS components.
-- Add lightweight text-based structural editing helpers such as `selectionRange` without introducing heavy parsing.
-- Add lightweight text-based editor assistance such as `inlayHint` when it clearly improves readability.
-- Add lightweight text-based editor assistance such as `codeAction` when it can reuse existing diagnostics or symbol heuristics.
-- Add lightweight text-based editor assistance such as `semanticTokens` when it can stay declaration- and context-driven.
-- Keep hover, definition, references, and rename behavior aligned with the symbol model already used in the codebase.
-- Preserve the existing import/export and linked-reference behavior while refining it incrementally.
+- P0-P3 completed (20/20). Core LSP capabilities are stable.
+- 25 ArkTS decorators fully supported across parser/hover/diagnostics layers (V1: 13, V2: 10 + @Monitor/@Provider/@Consumer key matching).
+- V1/V2 decorator mixing diagnostics, @Param/@Event scope, @Computed getter, @Trace scope constraints.
+- Component tree semantics with @Builder/@BuilderParam slot-like modeling and ERROR recovery.
+- Cross-file component resolution, component props extraction, and component call props diagnostics (unknown/missing required props).
+- Cross-file @Builder function tracking (global + struct-member) with definition navigation and hover info.
+- Incremental re-parsing via tree-sitter edit API (applyDocumentEdit + parseArkTSIncremental).
+- Workspace symbol index with startup pre-indexing and lifecycle-driven updates.
+- CodeLens provider for component overviews above struct declarations.
+- Parse cache with (uri, version, contentHash) keying and raw Tree retention.
 
 ## Agent Workflow
 
