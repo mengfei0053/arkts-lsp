@@ -2,6 +2,8 @@ import { InlayHint, InlayHintKind, Range } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { isPositionWithinRange } from "./text.js";
 import { resolveCallableSignature } from "./signature.js";
+import { parseArkTS } from "./parser.js";
+import { buildTypeInlayHints } from "./type-inlay.js";
 
 export function buildInlayHints(
   documents: TextDocument[],
@@ -34,6 +36,22 @@ export function buildInlayHints(
           position: argument.position,
           label: `${parameterName}:`,
           kind: InlayHintKind.Parameter,
+          paddingRight: true,
+        });
+      }
+    }
+  }
+
+  // Type inference hints: show inferred type for untyped variables
+  const typeTree = parseArkTS(document);
+  if (typeTree) {
+    const typeHints = buildTypeInlayHints(typeTree);
+    for (const hint of typeHints) {
+      if (isPositionWithinRange(hint.position, range)) {
+        hints.push({
+          position: hint.position,
+          label: hint.label,
+          kind: InlayHintKind.Type,
           paddingRight: true,
         });
       }

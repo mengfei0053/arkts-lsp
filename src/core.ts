@@ -20,3 +20,4 @@ export * from "./call-hierarchy.js";
 export * from "./type-hierarchy.js";
 export * from "./type-model.js";
 export * from "./type-hover.js";
+export * from "./type-inlay.js";
