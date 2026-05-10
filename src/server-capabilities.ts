@@ -32,5 +32,6 @@ export function buildServerCapabilities(): InitializeResult["capabilities"] {
     signatureHelpProvider: {
       triggerCharacters: ["(", ","],
     },
+    callHierarchyProvider: true,
   };
 }

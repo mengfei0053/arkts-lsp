@@ -51,6 +51,9 @@ import {
   getMemberAccessContextAtPosition,
   getNamedImportContextAtPosition,
   ServerSettings,
+  prepareCallHierarchy,
+  incomingCalls,
+  outgoingCalls,
 } from "./core.js";
 import {
   buildProjectContext,
@@ -357,6 +360,27 @@ connection.onSignatureHelp(({ textDocument, position }): SignatureHelp | null =>
     resolveRelativeModule(documentUri, specifier, project.documents),
   );
 });
+
+// Call Hierarchy — use generic request handlers for broader version compatibility
+connection.onRequest("textDocument/prepareCallHierarchy" as never, (({
+  textDocument, position,
+}: { textDocument: { uri: string }; position: { line: number; character: number } }) => {
+  const document = loadDocumentFromUri(textDocument.uri, documents.all());
+  if (!document) return [];
+  return prepareCallHierarchy(document, position);
+}) as never);
+
+connection.onRequest("callHierarchy/incomingCalls" as never, (({
+  item,
+}: { item: unknown }) => {
+  return incomingCalls(item as Parameters<typeof incomingCalls>[0], documents.all());
+}) as never);
+
+connection.onRequest("callHierarchy/outgoingCalls" as never, (({
+  item,
+}: { item: unknown }) => {
+  return outgoingCalls(item as Parameters<typeof outgoingCalls>[0], documents.all());
+}) as never);
 
 async function validateTextDocument(textDocument: TextDocument): Promise<void> {
   const settings = await getDocumentSettings(textDocument.uri);

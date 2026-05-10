@@ -16,3 +16,4 @@ export * from "./codelens.js";
 export * from "./prop-diagnostics.js";
 export * from "./builder-resolver.js";
 export * from "./workspace-indexer.js";
+export * from "./call-hierarchy.js";
