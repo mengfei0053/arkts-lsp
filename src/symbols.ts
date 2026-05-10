@@ -1,5 +1,6 @@
 import {
   CompletionItemKind,
+  DocumentSymbol,
   Location,
   Position,
   SymbolInformation,
@@ -7,7 +8,7 @@ import {
   WorkspaceSymbol,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { ArkTSNode, findNodesByType, getDecoratorNames, getTopLevelDeclarations, parseArkTS } from "./parser.js";
+import { ArkTSNode, findNodesByType, getDecoratorNames, getStructDeclarations, getTopLevelDeclarations, parseArkTS } from "./parser.js";
 import { getEnclosingTypeContextAtPosition, getWordAtPosition, isPositionWithinRange, matchArktsTypeDeclaration } from "./text.js";
 
 export function collectDocumentSymbols(document: TextDocument): SymbolInformation[] {
@@ -543,4 +544,77 @@ function dedupeTypeMembers(members: TypeMemberSymbol[]): TypeMemberSymbol[] {
     seen.add(key);
     return true;
   });
+}
+
+// ─── Hierarchical Document Symbols ─────────────────────────────────────────
+
+/**
+ * Collect hierarchical document symbols where struct members are nested
+ * as children under their parent struct.
+ */
+export function collectHierarchicalDocumentSymbols(document: TextDocument): DocumentSymbol[] {
+  const tree = parseArkTS(document);
+  if (!tree) {
+    return [];
+  }
+
+  const structs = getStructDeclarations(tree);
+  const result: DocumentSymbol[] = [];
+
+  for (const struct of structs) {
+    const classBody = struct.node.children.find((c: { type: string }) => c.type === "class_body");
+    const children: DocumentSymbol[] = [];
+
+    if (classBody) {
+      for (const child of classBody.children) {
+        if (child.type === "method_definition") {
+          const nameNode = child.children.find((c: { type: string }) => c.type === "property_identifier");
+          if (nameNode) {
+            const decorators = getDecoratorNames(child);
+            children.push({
+              name: nameNode.text,
+              detail: decorators.length > 0 ? decorators.join(", ") : "method",
+              kind: SymbolKind.Method,
+              range: { start: child.startPosition, end: child.endPosition },
+              selectionRange: {
+                start: child.startPosition,
+                end: { line: child.startPosition.line, character: child.startPosition.character + nameNode.text.length },
+              },
+            });
+          }
+        }
+
+        if (child.type === "public_field_definition") {
+          const nameNode = child.children.find((c: { type: string }) => c.type === "property_identifier");
+          if (nameNode) {
+            const decorators = getDecoratorNames(child);
+            children.push({
+              name: nameNode.text,
+              detail: decorators.length > 0 ? decorators.join(", ") : "field",
+              kind: SymbolKind.Property,
+              range: { start: child.startPosition, end: child.endPosition },
+              selectionRange: {
+                start: child.startPosition,
+                end: { line: child.startPosition.line, character: child.startPosition.character + nameNode.text.length },
+              },
+            });
+          }
+        }
+      }
+    }
+
+    result.push({
+      name: struct.name,
+      detail: struct.decorators.join(", "),
+      kind: SymbolKind.Struct,
+      range: { start: struct.node.startPosition, end: struct.node.endPosition },
+      selectionRange: {
+        start: { line: struct.line, character: 0 },
+        end: { line: struct.line, character: struct.name.length },
+      },
+      children,
+    });
+  }
+
+  return result;
 }

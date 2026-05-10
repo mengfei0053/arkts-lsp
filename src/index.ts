@@ -37,6 +37,7 @@ import {
   buildSemanticTokens,
   collectDiagnostics,
   collectDocumentSymbols,
+  collectHierarchicalDocumentSymbols,
   collectRelativeImportDocumentLinks,
   collectExportedSymbolLocations,
   collectWorkspaceSymbols,
@@ -125,7 +126,7 @@ connection.onDocumentSymbol(({ textDocument }) => {
     return [];
   }
 
-  return collectDocumentSymbols(document);
+  return collectHierarchicalDocumentSymbols(document);
 });
 
 connection.onWorkspaceSymbol(({ query }) => {
