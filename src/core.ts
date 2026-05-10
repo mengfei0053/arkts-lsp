@@ -18,3 +18,5 @@ export * from "./builder-resolver.js";
 export * from "./workspace-indexer.js";
 export * from "./call-hierarchy.js";
 export * from "./type-hierarchy.js";
+export * from "./type-model.js";
+export * from "./type-hover.js";

@@ -7,6 +7,7 @@ import { collectDocumentSymbols, displayDocumentName, findDocumentMemberSymbolAt
 import { lookupImportedComponent, resolveImportedComponents } from "./component-resolver.js";
 import { lookupImportedBuilder, resolveImportedBuilders } from "./builder-resolver.js";
 import { getComponentProps } from "./component-props.js";
+import { buildTypeHover } from "./type-hover.js";
 
 export function buildHover(document: TextDocument, position: Position): Hover | null {
   // Check decorator-specific hovers first (precise position matching on decorator nodes)
@@ -64,6 +65,12 @@ export function buildHover(document: TextDocument, position: Position): Hover | 
   const decoratedDeclarationHover = buildDecoratedDeclarationHover(document, position);
   if (decoratedDeclarationHover) {
     return decoratedDeclarationHover;
+  }
+
+  // Type-aware hover: show parsed type info when hovering over a type annotation
+  const typeHover = buildTypeHover(document, position);
+  if (typeHover) {
+    return typeHover;
   }
 
   const symbol = collectDocumentSymbols(document).find((candidate) => candidate.name === getWordAtPosition(document, position));
