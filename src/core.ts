@@ -15,3 +15,4 @@ export * from "./server-capabilities.js";
 export * from "./codelens.js";
 export * from "./prop-diagnostics.js";
 export * from "./builder-resolver.js";
+export * from "./workspace-indexer.js";

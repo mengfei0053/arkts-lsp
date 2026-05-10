@@ -59,6 +59,7 @@ import {
   resolveRelativeModule,
 } from "./project.js";
 import { buildServerCapabilities } from "./server-capabilities.js";
+import { indexWorkspace, indexDocument, removeDocumentFromIndex } from "./workspace-indexer.js";
 
 const defaultSettings: ServerSettings = { maxNumberOfProblems: 100 };
 const globalSettings: ServerSettings = defaultSettings;
@@ -81,6 +82,15 @@ connection.onInitialized(() => {
   if (hasConfigurationCapability) {
     connection.client.register(DidChangeConfigurationNotification.type, undefined);
   }
+  // Index all already-open documents at startup
+  const count = indexWorkspace(documents.all());
+  if (count > 0) {
+    connection.console.log(`arkts-lsp: indexed ${count} workspace documents`);
+  }
+});
+
+documents.onDidOpen(({ document }) => {
+  indexDocument(document);
 });
 
 connection.onDidChangeConfiguration(() => {
@@ -89,9 +99,11 @@ connection.onDidChangeConfiguration(() => {
 
 documents.onDidClose((event) => {
   connection.sendDiagnostics({ uri: event.document.uri, diagnostics: [] });
+  removeDocumentFromIndex(event.document.uri);
 });
 
 documents.onDidChangeContent((change) => {
+  indexDocument(change.document);
   void validateTextDocument(change.document);
 });
 
