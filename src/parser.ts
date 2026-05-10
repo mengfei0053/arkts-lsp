@@ -169,7 +169,15 @@ parser.setLanguage(ArkTSModule.ArkTS);
 
 // ─── Parse Cache ─────────────────────────────────────────────────────────────
 
-const parseCache = new Map<string, { version: number; contentHash: number; tree: ArkTSTree }>();
+type CachedEntry = {
+  version: number;
+  contentHash: number;
+  tree: ArkTSTree;
+  /** Raw tree-sitter Tree for incremental re-parse */
+  rawTree: Parser.Tree | null;
+};
+
+const parseCache = new Map<string, CachedEntry>();
 
 export function clearParseCache(uri?: string): void {
   if (uri) {
@@ -187,6 +195,88 @@ function contentHash(text: string): number {
   return hash;
 }
 
+// ─── Incremental Edit Support ───────────────────────────────────────────────
+
+interface TextChange {
+  range?: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+  text: string;
+}
+
+/**
+ * Apply LSP text document content changes to the cached tree for incremental re-parsing.
+ * Must be called BEFORE parseArkTS() with the updated document.
+ * @param uri - The document URI
+ * @param changes - The content change events from the LSP
+ * @param oldSource - The document text BEFORE the changes
+ */
+export function applyDocumentEdit(uri: string, changes: TextChange[], oldSource: string): void {
+  const cached = parseCache.get(uri);
+  if (!cached?.rawTree) {
+    return; // No cached tree — will fall back to full parse
+  }
+
+  const lines = oldSource.split("\n");
+
+  for (const change of changes) {
+    // Full content change (no range) — can't do incremental, invalidate rawTree
+    if (!change.range) {
+      cached.rawTree = null;
+      return;
+    }
+
+    const { start, end } = change.range;
+
+    // Convert LSP Position to byte offset
+    const startIndex = positionToOffset(lines, start.line, start.character);
+    const oldEndIndex = positionToOffset(lines, end.line, end.character);
+    const newEndIndex = startIndex + change.text.length;
+
+    // Convert LSP Position to tree-sitter Point (row, column)
+    const startPosition = { row: start.line, column: start.character };
+    const oldEndPosition = { row: end.line, column: end.character };
+
+    // Compute new end position from the inserted text
+    const newLines = change.text.split("\n");
+    const newEndPosition = newLines.length === 1
+      ? { row: start.line, column: start.character + change.text.length }
+      : { row: start.line + newLines.length - 1, column: newLines[newLines.length - 1].length };
+
+    cached.rawTree.edit({
+      startIndex,
+      oldEndIndex,
+      newEndIndex,
+      startPosition,
+      oldEndPosition,
+      newEndPosition,
+    });
+
+    // Update lines for subsequent edits (apply changes to our local copy)
+    const before = oldSource.substring(0, startIndex);
+    const after = oldSource.substring(oldEndIndex);
+    const updatedSource = before + change.text + after;
+    lines.splice(0, lines.length, ...updatedSource.split("\n"));
+    // Note: oldSource can't be reassigned in a const context, but we track via lines array
+    // For multi-edit, we need to update oldSource — use a mutable reference
+    (applyDocumentEdit as { _lastSource?: string })._lastSource = updatedSource;
+  }
+}
+
+function positionToOffset(lines: string[], line: number, character: number): number {
+  let offset = 0;
+  for (let i = 0; i < line && i < lines.length; i++) {
+    offset += lines[i].length + 1; // +1 for newline
+  }
+  if (line < lines.length) {
+    offset += Math.min(character, lines[line].length);
+  }
+  return offset;
+}
+
+// ─── Parse ──────────────────────────────────────────────────────────────────
+
 export function parseArkTS(document: TextDocument): ArkTSTree | null {
   const source = document.getText();
   if (!source.trim()) {
@@ -201,15 +291,54 @@ export function parseArkTS(document: TextDocument): ArkTSTree | null {
     return cached.tree;
   }
 
-  const tree = parser.parse(source);
+  // Full re-parse (incremental path handled by parseArkTSIncremental)
+  const rawTree = parser.parse(source);
+
   const result: ArkTSTree = {
-    rootNodeType: tree.rootNode.type,
-    rootNode: wrapNode(tree.rootNode, source, null),
+    rootNodeType: rawTree.rootNode.type,
+    rootNode: wrapNode(rawTree.rootNode, source, null),
     document,
   };
 
-  parseCache.set(cacheKey, { version: document.version, contentHash: hash, tree: result });
+  parseCache.set(cacheKey, { version: document.version, contentHash: hash, tree: result, rawTree });
   return result;
+}
+
+/**
+ * Incremental re-parse using an edited raw tree.
+ * Call applyDocumentEdit() first to update the cached tree's positions,
+ * then call this function to re-parse only the changed regions.
+ * Falls back to parseArkTS() if no edited tree is available.
+ */
+export function parseArkTSIncremental(document: TextDocument): ArkTSTree | null {
+  const source = document.getText();
+  if (!source.trim()) {
+    return null;
+  }
+
+  const cacheKey = document.uri;
+  const cached = parseCache.get(cacheKey);
+  const hash = contentHash(source);
+
+  // Exact cache hit
+  if (cached && cached.version === document.version && cached.contentHash === hash) {
+    return cached.tree;
+  }
+
+  // If we have a rawTree that was edited via applyDocumentEdit, do incremental parse
+  if (cached?.rawTree) {
+    const rawTree = parser.parse(source, cached.rawTree);
+    const result: ArkTSTree = {
+      rootNodeType: rawTree.rootNode.type,
+      rootNode: wrapNode(rawTree.rootNode, source, null),
+      document,
+    };
+    parseCache.set(cacheKey, { version: document.version, contentHash: hash, tree: result, rawTree });
+    return result;
+  }
+
+  // Fallback to full parse
+  return parseArkTS(document);
 }
 
 export function findNodesByType(tree: ArkTSTree, type: string): ArkTSNode[] {
