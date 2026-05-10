@@ -123,6 +123,47 @@ export type DecoratorCallInfo = {
   line: number;
 };
 
+export type MonitorDecoratorInfo = {
+  callbackName: string;
+  observedFields: string[];
+  structName: string;
+  line: number;
+  node: ArkTSNode;
+};
+
+export type ProviderConsumerInfo = {
+  kind: "Provider" | "Consumer";
+  key: string;
+  fieldName: string;
+  structName: string;
+  line: number;
+  node: ArkTSNode;
+};
+
+export type V2ComponentInfo = {
+  name: string;
+  isV2: boolean;
+  decorators: string[];
+  line: number;
+  node: ArkTSNode;
+};
+
+export type ComputedMethodInfo = {
+  name: string;
+  structName: string;
+  isGetter: boolean;
+  line: number;
+  node: ArkTSNode;
+};
+
+export type ObservedV2ClassInfo = {
+  name: string;
+  isObservedV2: boolean;
+  traceFields: string[];
+  line: number;
+  node: ArkTSNode;
+};
+
 const parser = new Parser();
 parser.setLanguage(ArkTSModule.ArkTS);
 
@@ -1042,4 +1083,333 @@ function extractFirstStringArgument(argsNode: ArkTSNode | undefined): string | n
   }
   const fragment = stringNode.children.find((child) => child.type === "string_fragment");
   return fragment?.text ?? null;
+}
+
+// ─── V2 Decorator Extraction ────────────────────────────────────────────────
+
+/**
+ * Extract @Monitor decorator info from @ComponentV2 structs.
+ * @Monitor('field1', 'field2') onFieldChange(mon: IMonitor) {}
+ * Same AST pattern as @Watch: decorator as leading sibling of method_definition.
+ */
+export function getMonitorDecorators(tree: ArkTSTree): MonitorDecoratorInfo[] {
+  const results: MonitorDecoratorInfo[] = [];
+  const structs = getStructDeclarations(tree);
+
+  const findStructNameAtLine = (line: number): string => {
+    for (const struct of structs) {
+      if (line >= struct.line && line <= struct.node.endPosition.line) {
+        return struct.name;
+      }
+    }
+    return "";
+  };
+
+  // Pattern 1: decorator as leading sibling of method_definition (normal parse)
+  const methods = findNodesByType(tree, "method_definition");
+  for (const method of methods) {
+    const methodName = findChildText(method, "property_identifier");
+    if (!methodName) {
+      continue;
+    }
+
+    // Check if method has @Monitor decorator as leading sibling in class_body
+    const parent = method.parent;
+    if (!parent) {
+      continue;
+    }
+
+    const methodIndex = parent.children.indexOf(method);
+    let monitorDeco: ArkTSNode | null = null;
+    for (let i = methodIndex - 1; i >= 0; i -= 1) {
+      const sibling = parent.children[i];
+      if (sibling.type === "decorator") {
+        const name = getDecoratorCallName(sibling);
+        if (name === "Monitor") {
+          monitorDeco = sibling;
+        }
+        break; // only check immediate preceding decorator
+      }
+      break; // non-decorator sibling means no @Monitor here
+    }
+
+    if (!monitorDeco) {
+      continue;
+    }
+
+    const observedFields = extractStringArgumentsFromDecorator(monitorDeco);
+    if (observedFields.length === 0) {
+      continue;
+    }
+
+    const structName = findAncestorName(method, "struct_declaration", "type_identifier")
+      ?? findStructNameAtLine(method.startPosition.line);
+
+    results.push({
+      callbackName: methodName,
+      observedFields,
+      structName: structName ?? "",
+      line: monitorDeco.startPosition.line,
+      node: monitorDeco,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Extract @Provider and @Consumer decorator info with key aliases.
+ * @Provider('storeKey') data: number = 0
+ * @Consumer('storeKey') received: number = 0
+ * Both appear as decorator inside public_field_definition (or ERROR recovery).
+ */
+export function getProviderConsumerPairs(tree: ArkTSTree): ProviderConsumerInfo[] {
+  const results: ProviderConsumerInfo[] = [];
+  const structs = getStructDeclarations(tree);
+
+  const findStructNameAtLine = (line: number): string => {
+    for (const struct of structs) {
+      if (line >= struct.line && line <= struct.node.endPosition.line) {
+        return struct.name;
+      }
+    }
+    return "";
+  };
+
+  const processDecoratorNode = (deco: ArkTSNode, fieldName: string): void => {
+    const decoName = getDecoratorCallName(deco);
+    if (decoName !== "Provider" && decoName !== "Consumer") {
+      return;
+    }
+
+    const stringArgs = extractStringArgumentsFromDecorator(deco);
+    // Key alias: first string arg, or field name as default
+    const key = stringArgs[0] ?? fieldName;
+    const structName = findAncestorName(deco, "struct_declaration", "type_identifier")
+      ?? findStructNameAtLine(deco.startPosition.line);
+
+    results.push({
+      kind: decoName as "Provider" | "Consumer",
+      key,
+      fieldName,
+      structName: structName ?? "",
+      line: deco.startPosition.line,
+      node: deco,
+    });
+  };
+
+  // Pattern 1: decorator inside public_field_definition
+  const fields = findNodesByType(tree, "public_field_definition");
+  for (const field of fields) {
+    const fieldName = findChildText(field, "property_identifier");
+    if (!fieldName) {
+      continue;
+    }
+
+    // Direct children
+    for (const child of field.children) {
+      if (child.type === "decorator") {
+        processDecoratorNode(child, fieldName);
+      }
+    }
+
+    // ERROR recovery: decorator buried inside ERROR child
+    for (const child of field.children) {
+      if (child.type === "ERROR") {
+        for (const errChild of child.children) {
+          if (errChild.type === "decorator") {
+            processDecoratorNode(errChild, fieldName);
+          }
+        }
+      }
+    }
+  }
+
+  // Pattern 2: decorator as sibling in ERROR nodes (ERROR recovery)
+  const errorNodes = findNodesByType(tree, "ERROR");
+  for (const errorNode of errorNodes) {
+    const decoratorNodes = errorNode.children.filter((c) => c.type === "decorator");
+    for (const deco of decoratorNodes) {
+      const decoName = getDecoratorCallName(deco);
+      if (decoName !== "Provider" && decoName !== "Consumer") {
+        continue;
+      }
+      // Find closest property_identifier sibling
+      const decoIndex = errorNode.children.indexOf(deco);
+      let fieldName = "";
+      for (let i = decoIndex + 1; i < errorNode.children.length; i += 1) {
+        if (errorNode.children[i].type === "property_identifier") {
+          fieldName = errorNode.children[i].text;
+          break;
+        }
+      }
+      if (!fieldName) {
+        continue;
+      }
+      // Avoid duplicates with Pattern 1
+      const isDup = results.some(
+        (r) => r.kind === (decoName as "Provider" | "Consumer") && r.fieldName === fieldName,
+      );
+      if (!isDup) {
+        processDecoratorNode(deco, fieldName);
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Get all struct declarations with V2 classification.
+ * @ComponentV2 → isV2: true, @Component → isV2: false
+ */
+export function getV2ComponentInfo(tree: ArkTSTree): V2ComponentInfo[] {
+  return getStructDeclarations(tree).map((struct) => ({
+    name: struct.name,
+    isV2: struct.decorators.includes("ComponentV2"),
+    decorators: struct.decorators,
+    line: struct.line,
+    node: struct.node,
+  }));
+}
+
+/**
+ * Extract @Computed getter methods from @ComponentV2 structs.
+ * @Computed get doubleCount(): number { ... }
+ * @Computed appears as decorator leading sibling of method_definition.
+ */
+export function getComputedMethods(tree: ArkTSTree): ComputedMethodInfo[] {
+  const results: ComputedMethodInfo[] = [];
+  const structs = getStructDeclarations(tree);
+
+  const findStructNameAtLine = (line: number): string => {
+    for (const struct of structs) {
+      if (line >= struct.line && line <= struct.node.endPosition.line) {
+        return struct.name;
+      }
+    }
+    return "";
+  };
+
+  const methods = findNodesByType(tree, "method_definition");
+  for (const method of methods) {
+    const methodName = findChildText(method, "property_identifier");
+    if (!methodName) {
+      continue;
+    }
+
+    // Check if method has @Computed decorator as leading sibling
+    const parent = method.parent;
+    if (!parent) {
+      continue;
+    }
+
+    const methodIndex = parent.children.indexOf(method);
+    let hasComputed = false;
+    for (let i = methodIndex - 1; i >= 0; i -= 1) {
+      const sibling = parent.children[i];
+      if (sibling.type === "decorator") {
+        const name = getDecoratorCallName(sibling);
+        if (name === "Computed") {
+          hasComputed = true;
+        }
+        break;
+      }
+      break;
+    }
+
+    if (!hasComputed) {
+      continue;
+    }
+
+    const structName = findAncestorName(method, "struct_declaration", "type_identifier")
+      ?? findStructNameAtLine(method.startPosition.line);
+
+    // Detect getter: method text starts with "get "
+    const isGetter = method.text.startsWith("get ");
+
+    results.push({
+      name: methodName,
+      structName: structName ?? "",
+      isGetter,
+      line: method.startPosition.line,
+      node: method,
+    });
+  }
+
+  return results;
+}
+
+/**
+ * Identify @ObservedV2 classes and their @Trace fields.
+ * @ObservedV2 class DataModel { @Trace name: string = '' }
+ */
+export function getObservedV2Classes(tree: ArkTSTree): ObservedV2ClassInfo[] {
+  const results: ObservedV2ClassInfo[] = [];
+  const classNodes = findNodesByType(tree, "class_declaration");
+
+  for (const classNode of classNodes) {
+    const decorators = getDecoratorNames(classNode);
+    if (!decorators.includes("ObservedV2")) {
+      continue;
+    }
+
+    const name = findChildText(classNode, "type_identifier") ?? "";
+    const classBody = classNode.children.find((c) => c.type === "class_body");
+
+    const traceFields: string[] = [];
+    if (classBody) {
+      for (const child of classBody.children) {
+        if (child.type === "public_field_definition") {
+          const fieldDecorators = getDecoratorNames(child);
+          if (fieldDecorators.includes("Trace")) {
+            const fieldName = findChildText(child, "property_identifier");
+            if (fieldName) {
+              traceFields.push(fieldName);
+            }
+          }
+        }
+      }
+    }
+
+    results.push({
+      name,
+      isObservedV2: true,
+      traceFields,
+      line: classNode.startPosition.line,
+      node: classNode,
+    });
+  }
+
+  return results;
+}
+
+// ─── V2 Helper Functions ────────────────────────────────────────────────────
+
+function getDecoratorCallName(deco: ArkTSNode): string | null {
+  // Decorator without arguments: @Local → identifier child
+  const directIdentifier = deco.children.find((c) => c.type === "identifier");
+  if (directIdentifier) {
+    return directIdentifier.text;
+  }
+  // Decorator with arguments: @Monitor('x') → call_expression → identifier
+  const callExpr = deco.children.find((c) => c.type === "call_expression");
+  if (callExpr) {
+    return findChildText(callExpr, "identifier");
+  }
+  return null;
+}
+
+function extractStringArgumentsFromDecorator(deco: ArkTSNode): string[] {
+  const callExpr = deco.children.find((c) => c.type === "call_expression");
+  if (!callExpr) {
+    return [];
+  }
+  const argsNode = findChildNode(callExpr, "arguments");
+  if (!argsNode) {
+    return [];
+  }
+  return argsNode.children
+    .filter((c) => c.type === "string")
+    .map((c) => c.children.find((sc) => sc.type === "string_fragment")?.text ?? c.text);
 }
