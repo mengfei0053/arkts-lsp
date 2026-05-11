@@ -1,6 +1,6 @@
 {
   "name": "@fe-essential/arkts-lsp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ArkTS language server MVP",
   "license": "MIT",
   "private": false,
