@@ -31,12 +31,6 @@ jobs:
         run: |
           rm -rf node_modules/tree-sitter-arkts
           cp -r vendor/tree-sitter-arkts node_modules/
-          echo "=== debug: node_modules/tree-sitter-arkts ==="
-          ls -la node_modules/tree-sitter-arkts/
-          echo "=== debug: dist ==="
-          ls -la node_modules/tree-sitter-arkts/dist/
-          echo "=== debug: package.json main/types ==="
-          node -e "const p=require('./node_modules/tree-sitter-arkts/package.json'); console.log('main:',p.main,'types:',p.types)"
 
       - name: Type check
         run: npm run check
