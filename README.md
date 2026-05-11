@@ -110,21 +110,23 @@ parser、decorator metadata/hover/diagnostics、V2 约束、component props、bu
 
 ## opencode 接入
 
-### 全局配置（仅 .ets）
+### 方式一：npx 免安装（推荐，首次自动下载）
+
+无需全局安装，opencode 启动时 `npx` 自动拉取最新版本：
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "lsp": {
     "arkts-lsp": {
-      "command": ["arkts-lsp"],
+      "command": ["npx", "@fe-essential/arkts-lsp"],
       "extensions": [".ets"]
     }
   }
 }
 ```
 
-### 项目级配置（接管 `.ets` + `.ts`，禁用默认 TypeScript LSP）
+**在鸿蒙工程中接管全部 `.ets` + `.ts`（禁用默认 TS LSP）：**
 
 ```json
 {
@@ -132,11 +134,32 @@ parser、decorator metadata/hover/diagnostics、V2 约束、component props、bu
   "lsp": {
     "typescript": { "disabled": true },
     "arkts-lsp": {
-      "command": ["arkts-lsp"],
+      "command": ["npx", "@fe-essential/arkts-lsp"],
       "extensions": [".ets", ".ts"],
       "initialization": {
         "projectMarkers": ["AppScope/app.json5", "hvigorfile.ts", "build-profile.json5"]
       }
+    }
+  }
+}
+```
+
+> 配置文件放于项目根目录 `opencode.json` 或全局 `~/.config/opencode/opencode.json`。
+
+### 方式二：全局安装
+
+```bash
+npm install -g @fe-essential/arkts-lsp
+```
+
+然后 opencode 直接引用命令名：
+
+```json
+{
+  "lsp": {
+    "arkts-lsp": {
+      "command": ["arkts-lsp"],
+      "extensions": [".ets"]
     }
   }
 }
