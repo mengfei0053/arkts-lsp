@@ -1,0 +1,71 @@
+{
+  "name": "tree-sitter-arkts",
+  "version": "1.0.1",
+  "description": "ArkTS grammar for tree-sitter",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "keywords": [
+    "tree-sitter",
+    "arkts",
+    "parser",
+    "harmonyos",
+    "arkui"
+  ],
+  "author": "",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "prebuilds",
+    "src",
+    "bindings/node/binding.cc",
+    "binding.gyp",
+    "grammar.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "node-addon-api": "^8.5.0",
+    "node-gyp-build": "^4.8.0",
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-javascript": "^0.20.4",
+    "tree-sitter-typescript": "^0.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "node-gyp-build": "^4.8.0",
+    "prebuildify": "^6.0.1",
+    "tree-sitter-cli": "^0.20.0",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "generate": "npx tree-sitter generate",
+    "build": "npx tree-sitter generate && node-gyp rebuild && npm run build:ts",
+    "build:ts": "tsc",
+    "prebuild": "npm run generate && prebuildify --napi",
+    "prebuild:win32": "npm run generate && prebuildify --napi --platform win32",
+    "prebuild:linux": "npm run generate && prebuildify --napi --platform linux",
+    "prebuild:darwin": "npm run generate && prebuildify --napi --platform darwin",
+    "install": "node-gyp-build || true",
+    "test": "node test.js",
+    "test:structure": "node test-structure.js",
+    "prepublishOnly": "npm run generate && npm run build:ts",
+    "prebuild:all": "npm run prebuild:linux && npm run prebuild:win32 && npm run prebuild:darwin"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "gypfile": true,
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}
