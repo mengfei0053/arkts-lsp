@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "ArkTS LSP Test Fixture"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Entry Ability"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Test Fixture"
+    }
+  ]
+}

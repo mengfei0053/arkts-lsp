@@ -115,24 +115,32 @@ documents.onDidChangeContent((change) => {
 });
 
 connection.onHover(({ textDocument, position }): Hover | null => {
-  const document = loadDocumentFromUri(textDocument.uri, documents.all());
-  if (!document) {
+  try {
+    const document = loadDocumentFromUri(textDocument.uri, documents.all());
+    if (!document) {
+      return null;
+    }
+    const project = buildProjectContext(textDocument.uri, documents.all());
+    return buildLinkedHover(project.documents, document, position, (documentUri, specifier) =>
+      resolveRelativeModule(documentUri, specifier, project.documents),
+    );
+  } catch (err) {
+    connection.console.error(`hover error: ${String(err)}`);
     return null;
   }
-
-  const project = buildProjectContext(textDocument.uri, documents.all());
-  return buildLinkedHover(project.documents, document, position, (documentUri, specifier) =>
-    resolveRelativeModule(documentUri, specifier, project.documents),
-  );
 });
 
 connection.onDocumentSymbol(({ textDocument }) => {
-  const document = loadDocumentFromUri(textDocument.uri, documents.all());
-  if (!document) {
+  try {
+    const document = loadDocumentFromUri(textDocument.uri, documents.all());
+    if (!document) {
+      return [];
+    }
+    return collectHierarchicalDocumentSymbols(document);
+  } catch (err) {
+    connection.console.error(`documentSymbol error: ${String(err)}`);
     return [];
   }
-
-  return collectHierarchicalDocumentSymbols(document);
 });
 
 connection.onWorkspaceSymbol(({ query }) => {

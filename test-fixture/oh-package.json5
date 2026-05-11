@@ -1,0 +1,9 @@
+{
+  "name": "testfixture",
+  "version": "1.0.0",
+  "description": "ArkTS LSP Test Fixture - HarmonyOS project for LSP feature coverage testing",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {}
+}

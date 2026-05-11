@@ -30,6 +30,14 @@ export type StructDeclarationInfo = {
   node: ArkTSNode;
 };
 
+export type ClassDeclarationInfo = {
+  name: string;
+  decorators: string[];
+  exported: boolean;
+  line: number;
+  node: ArkTSNode;
+};
+
 export type MemberInfo = {
   name: string;
   line: number;
@@ -455,6 +463,17 @@ export function getStructDeclarations(tree: ArkTSTree): StructDeclarationInfo[] 
   }
 
   return results;
+}
+
+export function getClassDeclarations(tree: ArkTSTree): ClassDeclarationInfo[] {
+  const classNodes = findNodesByType(tree, "class_declaration");
+  return classNodes.map((node) => ({
+    name: findChildText(node, "type_identifier") ?? "",
+    decorators: getDecoratorNames(node),
+    exported: isExportedNode(node),
+    line: node.startPosition.line,
+    node,
+  }));
 }
 
 export function getBuilderFunctions(tree: ArkTSTree): BuilderFunctionInfo[] {

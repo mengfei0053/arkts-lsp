@@ -2,175 +2,115 @@
 
 [English README](./README.en.md)
 
-`arkts-lsp` 是一个面向 ArkTS/HarmonyOS 工程的轻量级 Language Server Protocol 实现。
+`arkts-lsp` 是一个面向 ArkTS/HarmonyOS 工程的轻量级 Language Server Protocol 实现，支持 28 项 LSP 能力，31/31 功能覆盖验证通过。
 
-项目当前的核心目标不是一次性做成完整编译器级语言服务，而是先提供一个可以持续迭代的、可运行、可测试、可接入编辑器和工具链的 ArkTS LSP。
+项目已实现 **P0-P5 全部 23 个里程碑**，具备完整的装饰器语义（25 个）、类型系统感知、跨文件组件/builder 解析、调用/类型层级等能力。通过 `opencode` 集成可在真实鸿蒙项目中稳定工作。
 
-最终方向是让类似 `opencode` 这样的工具在处理 ArkTS 文件时，可以稳定启动 `arkts-lsp`，并正常使用常见 LSP 能力。
+## 当前能力（28 项 LSP 功能）
 
-## 当前目标
+### 核心导航
+- **增量文本同步**：`didOpen` / `didChange` / `didClose`
+- **定义跳转**：同文件 + 跨文件（import/export 感知、@Builder 追踪）
+- **引用查找**：`@Provide/@Consume` 跨文档联动 + 文本级搜索
+- **重命名**：工作区编辑生成，`@Provide/@Consume` 联动
 
-当前阶段优先完成一个可持续演进的 MVP：
+### 代码智能
+- **补全**：关键字（43+）、`this.` 实例成员、import 路径、静态成员
+- **签名帮助**：实例方法 + 静态方法 + `this.field.method()` 链式调用
+- **悬停信息**：struct/@State/@Prop/@Link/@Provide/@Consume/@Observed/@Builder 语义、类型感知
+- **Inlay Hints**：参数名提示 + 无类型变量类型推断（number/string/boolean）
 
-- 完成 Node.js + TypeScript 项目骨架
-- 提供可运行的 LSP 服务端
-- 支持增量文本同步
-- 支持基础诊断、悬浮、跳转、引用、补全、重命名等能力
-- 建立测试基础，保证后续迭代不轻易回退
+### 诊断与修复
+- **诊断**：`any` 检测、TODO 标记、组件 props 校验（未知/缺少必传）
+- **V2 约束校验**：V1/V2 混用、@Param/@Event 作用域、@Computed getter、@Trace 作用域
+- **Code Actions**：`TODO` / `any` 快速修复
 
-## 当前能力
+### 符号与层级
+- **文档符号**：分层结构化（struct 成员嵌套为 children）
+- **工作区符号**：全项目搜索 + 启动预索引
+- **调用层级**：prepareCallHierarchy + incomingCalls + outgoingCalls
+- **类型层级**：struct + class 支持，supertypes + subtypes
 
-目前已经具备的能力包括：
+### 编辑器辅助
+- **Code Lens**：struct 上方展示组件类型 + props 数量
+- **语义高亮**：keyword/type/function/variable/decorator/property
+- **文档高亮**：同名标识符高亮
+- **折叠范围**：多行大括号代码块
+- **选择范围**：标识符/语句/代码块层级选择
+- **文档链接**：相对 import 路径可点击跳转
 
-- 增量文本同步
-- `TODO` 和 `any` 的基础诊断
-- 基础悬浮信息，以及 import/export 感知、描述更明确的符号悬浮
-- 基于正则的 ArkTS/TypeScript 常见声明符号提取
-- 文档符号和工作区符号搜索
-- 基于符号名的基础定义跳转，以及更贴近当前符号语义的导航结果
-- import/export 感知的 definition、references、rename
-- ArkTS 组件 `@State` / `@Prop` / `@Link` 字段的语义感知 hover、definition、references、rename
-- 基于 ArkTS 关键字、工作区符号和命名 import 导出的轻量补全
-- ArkTS 组件内更准确的 `this.` 实例成员补全
-- imported class 的静态成员补全
-- imported function / class method 的签名提示
-- 面向本地函数与 imported function alias 的轻量参数名 inlay hint
-- 基于现有 `TODO` / `any` 诊断的轻量 quick fix code action
-- 面向 ArkTS/TypeScript 源文件的轻量 semantic tokens（关键字、类型、函数、变量、装饰器、属性）
-- 相对 import 路径的模块解析与路径补全
-- 相对 import 路径的 DocumentLink / 可点击链接
-- 当前文档中的标识符高亮
-- 基于多行花括号块的轻量 folding range
-- 基于标识符、语句和花括号块的轻量 selection range
-- ArkTS/HarmonyOS 项目根识别
-- `.ets` / `.ts` 文件扫描与项目级文档加载
-- 相对 import 路径 definition 跳转
-- 相对 import 路径 completion 候选
-- 面向 `opencode` 的接入脚本和配置示例
+### 工程能力
+- **项目上下文**：根识别、`.ets`/`.ts` 扫描、跨文件文档加载
+- **模块解析**：相对路径 + `@kit.*` / `@ohos.*` 最小解析
+- **增量解析缓存**：parseCache + raw Tree + `parseArkTSIncremental()`
+- **opencode 集成**：全局/项目配置 + 启动脚本 + 覆盖矩阵 31/31
+
+### ArkTS 专属
+- **25 个装饰器**：V1（13）+ V2（10）+ @Monitor/@Provider/@Consumer 键名匹配
+- **组件语义**：@Builder/@BuilderParam 子树建模 + ERROR 恢复
+- **跨文件解析**：组件导入追踪 + @Builder 全局/成员追踪
+- **类型系统**：联合/交叉/数组/泛型/可为空 + hover + InlayHint
 
 ## 当前状态
 
-项目仍处于早期阶段，重点放在：
+| 指标 | 数据 |
+|---|---|
+| 单元测试 | 33 文件 / 298 用例 ✅ |
+| 集成覆盖 | 31/31 LSP 功能 ✅ |
+| 装饰器 | V1(13) + V2(10) + 2 键名 = 25 |
+| 构建 | `npm run build` + `npm run check` ✅ |
+| opencode | 全局 + 项目级配置 + 启动脚本 |
+| 测试项目 | `test-fixture/` — 9 源文件鸿蒙工程 |
 
-- 稳定 LSP 服务端生命周期
-- 提升可测试性
-- 逐步从“文本级匹配”升级为“ArkTS 项目级感知”
-- 优先做实 import/export 相关的导航、重命名和补全体验
-- 面向真实鸿蒙项目逐步验证 `opencode` 接入
-- 当行为或工作流发生变化时，及时同步更新 `README.md` 和相关 `AGENTS.md`
+## 快速开始
 
-## 从 npm 安装
-
-如果你只是想在项目中直接使用（不需要克隆源码），可以通过 npm 安装：
-
-### 全局安装
+### 从 npm 安装
 
 ```bash
 npm install -g @fe-essential/arkts-lsp
-```
-
-安装后可直接使用 `arkts-lsp` 命令启动服务：
-
-```bash
 arkts-lsp --stdio
 ```
 
-### 使用 npx（免安装）
+或使用 npx（免安装）：
 
 ```bash
 npx @fe-essential/arkts-lsp --stdio
 ```
 
-### 作为项目依赖安装
+### 本地开发
 
 ```bash
-npm install @fe-essential/arkts-lsp
-```
-
-安装后可通过 `node_modules/.bin/arkts-lsp --stdio` 调用。
-
-## 快速开始（本地开发）
-
-如果你要参与开发或运行测试，请克隆仓库后运行：
-
-```bash
+git clone <repo>
+cd arkts-lsp
 npm install
 npm run build
 npm run start -- --stdio
 ```
 
-如果只是本地开发，也可以直接运行：
-
-```bash
-npm run dev -- --stdio
-```
-
 ## 常用脚本
 
-- `npm run build`：编译 TypeScript 到 `dist/`
-- `npm run dev`：使用 `tsx` 启动开发态服务
-- `npm run start`：运行编译后的服务
-- `npm run check`：执行 TypeScript 类型检查
-- `npm test`：运行 Vitest 单元测试
+| 命令 | 用途 |
+|---|---|
+| `npm run build` | 编译 TypeScript 到 `dist/` |
+| `npm run dev` | `tsx` 开发态服务 |
+| `npm run start` | 运行编译后服务 |
+| `npm run check` | TypeScript 类型检查 |
+| `npm test` | 298 单元测试 |
+| `node scripts/coverage-matrix.cjs` | 31 项 LSP 全功能验证 |
+| `node scripts/integration-test.cjs` | 快速集成测试（8 项） |
 
 ## 测试覆盖
 
-当前测试主要覆盖最容易在早期迭代中回退的核心行为：
+### 单元测试（33 文件 / 298 用例）
+parser、decorator metadata/hover/diagnostics、V2 约束、component props、builder resolver、workspace indexer、incremental parse、cross-file component、hierarchical symbols、call hierarchy、type hierarchy、type model、type inlay、CodeLens、completion、hover、code action、semantic tokens、inlay hint、project API、e2e protocol
 
-- diagnostics 提取
-- symbol 提取
-- 光标位置取词
-- workspace symbol 过滤
-- definition 解析
-- references 查询
-- completion 结果
-- hover 内容格式化
-- ArkTS 组件字段语义与 `this.` 成员补全
-- inlay hint 参数名提示
-- code action quick fix
-- semantic tokens
-- document highlight
-- folding range
-- selection range
-- rename 生成的 workspace edit
-- 项目根识别
-- 项目文件扫描与项目级上下文加载
-- 相对 import 路径 DocumentLink 生成
-
-## 后续路线
-
-接下来的主线工作会集中在：
-
-1. import / module 解析
-2. 把 definition / references / rename 从文本级匹配继续提升到项目级解析
-3. 增加更贴近真实工程的 fixture 和集成测试
-4. 准备更完整的 `opencode` 端到端验证
-5. 优化补全和诊断质量
+### 集成测试
+- `scripts/integration-test.cjs` — 符号/补全/跳转/hover/诊断（8 项）
+- `scripts/coverage-matrix.cjs` — 全功能覆盖（31 项），使用 `test-fixture/` 鸿蒙项目
 
 ## opencode 接入
 
-根据 OpenCode 官方文档，LSP 可以通过 `opencode.json` 里的 `lsp` 字段自定义配置。文档说明：
-
-- 全局配置文件路径：`~/.config/opencode/opencode.json`
-- 项目配置文件路径：项目根目录下的 `opencode.json`
-- 自定义 LSP 需要提供 `command` 和 `extensions`
-
-仓库里已经提供了两个示例配置：
-
-- [examples/opencode.global.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.global.json:1)
-- [examples/opencode.project.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.project.json:1)
-
-并提供了一个稳定启动脚本：
-
-- [scripts/opencode-arkts-lsp](/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp:1)
-
-推荐的接入方式：
-
-1. 全局先启用 `.ets` 支持，避免影响普通 TypeScript 项目
-2. 在真正的 ArkTS/HarmonyOS 项目根目录下放置项目级 `opencode.json`
-3. 如果该项目里的 `.ts` 文件也希望由 `arkts-lsp` 接管，就在项目级配置中关闭 `typescript` 并把 `.ts` 加到 `extensions`
-
-如果你已经通过 `npm install -g @fe-essential/arkts-lsp` 安装，可以直接使用 `arkts-lsp` 命令：
+### 全局配置（仅 .ets）
 
 ```json
 {
@@ -184,49 +124,29 @@ npm run dev -- --stdio
 }
 ```
 
-或者使用 npx（无需全局安装）：
+### 项目级配置（接管 `.ets` + `.ts`，禁用默认 TypeScript LSP）
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "lsp": {
-    "arkts-lsp": {
-      "command": ["npx", "@fe-essential/arkts-lsp"],
-      "extensions": [".ets"]
-    }
-  }
-}
-```
-
-如果你从源码开发，也可以用本地启动脚本：
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "lsp": {
-    "arkts-lsp": {
-      "command": ["/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp"],
-      "extensions": [".ets"]
-    }
-  }
-}
-```
-
-如果是 ArkTS 项目级配置，推荐：
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "lsp": {
-    "typescript": {
-      "disabled": true
-    },
+    "typescript": { "disabled": true },
     "arkts-lsp": {
       "command": ["arkts-lsp"],
-      "extensions": [".ets", ".ts"]
+      "extensions": [".ets", ".ts"],
+      "initialization": {
+        "projectMarkers": ["AppScope/app.json5", "hvigorfile.ts", "build-profile.json5"]
+      }
     }
   }
 }
 ```
 
-这样做的目的，是让 `opencode` 在写 ArkTS 页面、组件和同项目辅助 `.ts` 文件时，都优先走 `arkts-lsp`。
+参考示例：[examples/opencode.global.json](examples/opencode.global.json)、[examples/opencode.project.json](examples/opencode.project.json)
+
+## 后续路线
+
+1. HarmonyOS API SDK 驱动 + 完整签名库
+2. Linked Editing Ranges / Moniker
+3. 文件监听 + workspace/configuration
+4. 真实项目集成测试 + 性能基准

@@ -13,7 +13,7 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 
 ## Current Focus
 
-- P0-P5 completed (23/23). Core LSP capabilities are stable.
+- P0-P5 completed (23/23). Core LSP capabilities are stable — 31/31 LSP features verified end-to-end.
 - 25 ArkTS decorators fully supported across parser/hover/diagnostics layers (V1: 13, V2: 10 + @Monitor/@Provider/@Consumer key matching).
 - V1/V2 decorator mixing diagnostics, @Param/@Event scope, @Computed getter, @Trace scope constraints.
 - Component tree semantics with @Builder/@BuilderParam slot-like modeling and ERROR recovery.
@@ -23,8 +23,9 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 - Workspace symbol index with startup pre-indexing and lifecycle-driven updates.
 - CodeLens provider for component overviews above struct declarations.
 - Parse cache with (uri, version, contentHash) keying and raw Tree retention.
-- P4: Hierarchical Document Symbols, Call Hierarchy (incoming/outgoing), Type Hierarchy (supertypes/subtypes).
-- P5: Type system awareness (type-model.ts), type-aware hover, extended inlay hints with inferred types.
+- P4: Hierarchical Document Symbols, Call Hierarchy (incoming/outgoing), Type Hierarchy (supertypes/subtypes, struct + class).
+- P5: Type system awareness (type-model.ts), type-aware hover, extended inlay hints with inferred types, SignatureHelp for this.field.method().
+- Integration: full-feature coverage matrix (31/31), HarmonyOS test-fixture project with opencode LSP config.
 
 ## Agent Workflow
 
@@ -59,5 +60,6 @@ This file applies to the whole repository unless a deeper `AGENTS.md` overrides 
 
 - `src/`: language server runtime and reusable analysis helpers
 - `test/`: unit and integration coverage for server behavior
-- `scripts/`: local wrapper scripts used for editor and tool integration
+- `scripts/`: local wrapper scripts, LSP integration test (`integration-test.cjs`), and feature coverage matrix (`coverage-matrix.cjs`)
 - `examples/`: sample configuration files for external integrations such as opencode
+- `test-fixture/`: HarmonyOS project fixture for end-to-end LSP testing (9 source files + build config)

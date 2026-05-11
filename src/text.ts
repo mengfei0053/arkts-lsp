@@ -305,7 +305,7 @@ export function getCallContextAtPosition(document: TextDocument, position: Posit
     return null;
   }
 
-  const calleeMatch = beforeCursor.slice(0, openParenIndex).match(/([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)\s*$/u);
+  const calleeMatch = beforeCursor.slice(0, openParenIndex).match(/([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*$/u);
   return calleeMatch ? { callee: calleeMatch[1], argumentIndex } : null;
 }
 

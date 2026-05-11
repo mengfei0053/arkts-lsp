@@ -21,6 +21,8 @@ This file applies to everything under `src/`.
 - Workspace symbol index with startup pre-indexing and lifecycle integration.
 - CodeLens provider and parse cache optimizations.
 - Type system: type-model.ts (union/intersection/array/generic/nullable parsing), type-hover.ts (AST-driven type info on hover), type-inlay.ts (inferred type hints for untyped variables).
+- SignatureHelp: supports `this.field.method()` chain calls (resolveThisFieldType) + instance methods (not just static).
+- Type Hierarchy: supports both struct and class declarations (getClassDeclarations).
 
 ## Implementation Guidelines
 
@@ -51,7 +53,9 @@ This file applies to everything under `src/`.
 - `inlay-hint.ts`: text-based inlay hint collection for lightweight parameter labels
 - `code-action.ts`: text-based quick fixes derived from existing diagnostics
 - `semantic-tokens.ts`: text-based semantic token collection and encoding
-- `signature.ts`: signature help parsing and resolution
+- `signature.ts`: signature help parsing and resolution (instance + static methods, `this.field.method()` chain calls)
+- `call-hierarchy.ts`: Call Hierarchy (prepareCallHierarchy + incomingCalls + outgoingCalls) via tree-sitter AST
+- `type-hierarchy.ts`: Type Hierarchy (struct + class support, supertypes + subtypes)
 - `project.ts`: ArkTS/HarmonyOS project root detection, source file discovery, project document loading, and relative module resolution
 - `selection-range.ts`: text-based nested selection ranges for identifiers, statements, and brace blocks
 - `observed-links.ts`: @Observed→@ObjectLink reactive observation chain tracking

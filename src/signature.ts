@@ -20,7 +20,29 @@ export function buildSignatureHelp(
     return null;
   }
 
-  const signature = resolveCallableSignature(documents, document, context.callee, resolveImportTarget);
+  // Resolve callee — handle `this.field.method()` by looking up field type
+  let callee = context.callee;
+  if (callee.startsWith("this.")) {
+    const parts = callee.split(".");
+    if (parts.length >= 3) {
+      // `this.todoModel.addItem` → resolve todoModel's type, then use `TodoModel.addItem`
+      const fieldName = parts[1];
+      const methodName = parts.slice(2).join(".");
+      const resolvedType = resolveThisFieldType(document, position, fieldName, documents);
+      if (resolvedType) {
+        callee = `${resolvedType}.${methodName}`;
+      }
+    } else if (parts.length === 2) {
+      // `this.methodName` → look for method in enclosing struct/class
+      const fieldName = parts[1];
+      const resolvedType = resolveThisFieldType(document, position, fieldName, documents);
+      if (resolvedType) {
+        callee = `${resolvedType}.${fieldName}`;
+      }
+    }
+  }
+
+  const signature = resolveCallableSignature(documents, document, callee, resolveImportTarget);
   if (!signature) {
     return null;
   }
@@ -119,7 +141,7 @@ function collectClassMethodSignatures(
     }
 
     const match = line.match(
-      /^\s*(?:public\s+|private\s+|protected\s+)?static\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?::\s*([^ {]+))?/u,
+      /^\s*(?:public\s+|private\s+|protected\s+)?(?:static\s+)?([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?::\s*([^ {]+))?/u,
     );
     if (!match) {
       continue;
@@ -160,4 +182,45 @@ function collectTopLevelFunctionSignatures(
 
 function parseParameterList(source: string): string[] {
   return source.split(",").map((parameter) => parameter.trim()).filter(Boolean);
+}
+
+/**
+ * When the callee is `this.fieldName.method()`, resolve the type of `fieldName`
+ * by looking at the enclosing struct's field declarations.
+ */
+function resolveThisFieldType(
+  document: TextDocument,
+  position: { line: number; character: number },
+  fieldName: string,
+  _documents: TextDocument[],
+): string | null {
+  const lines = document.getText().split(/\r?\n/u);
+
+  // Find enclosing struct/class by searching backward for struct/class declaration
+  let foundLine = -1;
+  for (let i = position.line; i >= 0; i--) {
+    const trimmed = lines[i].trim();
+    if (/^(?:export\s+)?(?:struct|class)\s+(\w+)/.test(trimmed)) {
+      foundLine = i;
+      break;
+    }
+  }
+  if (foundLine < 0) return null;
+
+  // Search for the field declaration and its type annotation
+  for (let i = foundLine + 1; i < lines.length; i++) {
+    const line = lines[i];
+    // Match: @Decorator fieldName: TypeName = ...
+    const fieldMatch = line.match(
+      new RegExp(`\\b${escapeRegExp(fieldName)}\\s*:\\s*([A-Za-z_]\\w*)`),
+    );
+    if (fieldMatch) {
+      return fieldMatch[1];
+    }
+    // Stop if we hit another struct/class or closing brace
+    if (/^(?:export\s+)?(?:struct|class)\s+/.test(line.trim())) break;
+    if (line.trim() === "}") break;
+  }
+
+  return null;
 }

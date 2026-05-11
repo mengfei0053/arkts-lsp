@@ -3,7 +3,7 @@ import {
   TypeHierarchyItem,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { findNodesByType, getStructDeclarations, parseArkTS, ArkTSNode } from "./parser.js";
+import { findNodesByType, getStructDeclarations, getClassDeclarations, parseArkTS, ArkTSNode } from "./parser.js";
 
 // ─── Prepare Type Hierarchy ─────────────────────────────────────────────────
 
@@ -14,12 +14,12 @@ export function prepareTypeHierarchy(
   const tree = parseArkTS(document);
   if (!tree) return [];
 
+  // Check struct declarations
   const structs = getStructDeclarations(tree);
   for (const struct of structs) {
     const line = struct.line;
     const endLine = struct.node.endPosition.line;
     if (position.line >= line && position.line <= endLine) {
-      // Check position is near the struct name
       const nameNode = struct.node.children.find(
         (c: { type: string }) => c.type === "type_identifier",
       );
@@ -31,8 +31,55 @@ export function prepareTypeHierarchy(
           return [makeTypeItem(struct.name, document.uri, struct.node, struct.decorators)];
         }
       }
-      // Fallback: if position is inside the struct range, return it
       return [makeTypeItem(struct.name, document.uri, struct.node, struct.decorators)];
+    }
+  }
+
+  // Check class declarations
+  const classDecls = getClassDeclarations(tree);
+  for (const classDecl of classDecls) {
+    if (position.line >= classDecl.node.startPosition.line &&
+        position.line <= classDecl.node.endPosition.line) {
+      const nameNode = classDecl.node.children.find(
+        (c: { type: string }) => c.type === "type_identifier",
+      );
+      if (nameNode) {
+        const nameLine = nameNode.startPosition.line;
+        const nameStart = nameNode.startPosition.character;
+        const nameEnd = nameNode.endPosition.character;
+        if (position.line === nameLine && position.character >= nameStart && position.character <= nameEnd) {
+          return [{
+            name: classDecl.name,
+            kind: SymbolKind.Class,
+            uri: document.uri,
+            range: {
+              start: classDecl.node.startPosition,
+              end: classDecl.node.endPosition,
+            },
+            selectionRange: {
+              start: classDecl.node.startPosition,
+              end: { line: classDecl.node.startPosition.line, character: classDecl.node.startPosition.character + classDecl.name.length },
+            },
+            detail: classDecl.decorators.length > 0 ? classDecl.decorators.join(", ") : "class",
+            data: { name: classDecl.name, uri: document.uri },
+          }];
+        }
+      }
+      return [{
+        name: classDecl.name,
+        kind: SymbolKind.Class,
+        uri: document.uri,
+        range: {
+          start: classDecl.node.startPosition,
+          end: classDecl.node.endPosition,
+        },
+        selectionRange: {
+          start: classDecl.node.startPosition,
+          end: { line: classDecl.node.startPosition.line, character: classDecl.node.startPosition.character + classDecl.name.length },
+        },
+        detail: classDecl.decorators.length > 0 ? classDecl.decorators.join(", ") : "class",
+        data: { name: classDecl.name, uri: document.uri },
+      }];
     }
   }
 

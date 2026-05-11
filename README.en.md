@@ -2,169 +2,115 @@
 
 [中文 README](./README.md)
 
-`arkts-lsp` is a lightweight Language Server Protocol implementation for ArkTS/HarmonyOS projects.
+`arkts-lsp` is a lightweight Language Server Protocol implementation for ArkTS/HarmonyOS projects, with 28 LSP capabilities and 31/31 feature coverage verified end-to-end.
 
-The project intentionally follows an MVP-first path. The short-term goal is not to build a compiler-grade ArkTS language engine all at once, but to provide a runnable, testable, extensible LSP server that can later be integrated into tools such as `opencode`.
+All P0-P5 milestones are complete — full decorator semantics (25), type-system awareness, cross-file component/builder resolution, call/type hierarchy, and opencode integration.
 
-## Current Goal
+## Current Capabilities (28 LSP Features)
 
-The repository is currently focused on a clean, iterative MVP:
+### Navigation
+- Incremental text sync: `didOpen` / `didChange` / `didClose`
+- Definition: same-file + cross-file (import/export-aware, @Builder tracking)
+- References: `@Provide/@Consume` cross-document + text-level search
+- Rename: workspace edit generation, `@Provide/@Consume` linked rename
 
-- project bootstrap for Node.js + TypeScript
-- a runnable LSP server
-- incremental text synchronization
-- basic diagnostics, hover, navigation, completion, and rename support
-- test coverage for the most regression-prone core behaviors
+### Intelligence
+- Completion: keywords (43+), `this.` members, import paths, static members
+- Signature Help: instance + static methods, `this.field.method()` chain calls
+- Hover: struct/@State/@Prop/@Link/@Provide/@Consume/@Observed/@Builder with type info
+- Inlay Hints: parameter names + inferred types (number/string/boolean)
 
-## Current Capabilities
+### Diagnostics
+- `any` detection, TODO markers, component props validation (unknown/missing required)
+- V2 constraints: V1/V2 mixing, @Param/@Event scope, @Computed getter, @Trace scope
+- Code Actions: TODO / `any` quick fixes
 
-- incremental text synchronization
-- TODO and `any` diagnostics
-- basic hover plus import/export-aware, more descriptive symbol hover
-- regex-based symbol extraction for common ArkTS/TypeScript declarations
-- document symbols and workspace symbols
-- basic definition lookup by symbol name, with more semantically relevant navigation results
-- import/export-aware definition, references, and rename
-- semantic hover, definition, references, and rename for ArkTS component fields using `@State`, `@Prop`, and `@Link`
-- lightweight completion from ArkTS keywords, indexed workspace symbols, and named-import exports
-- more accurate `this.` instance-member completion inside ArkTS components
-- static member completion for imported classes
-- signature help for imported functions and class methods
-- lightweight parameter-name inlay hints for local functions and imported function aliases
-- lightweight quick-fix code actions for existing TODO and `any` diagnostics
-- lightweight semantic tokens for ArkTS/TypeScript source files covering keywords, types, functions, variables, decorators, and safe property names
-- relative import path resolution and path completion
-- document links for relative import specifiers
-- exact-word document highlights in the current file
-- lightweight folding ranges for multi-line brace blocks
-- lightweight selection ranges for identifiers, statements, and brace blocks
-- ArkTS/HarmonyOS project root detection
-- `.ets` / `.ts` file scanning and project-level document loading
-- definition jumps on relative import specifiers
-- relative import path completion candidates
-- `opencode` integration scripts and config examples
+### Symbols & Hierarchy
+- Document Symbols: hierarchical (struct members as children)
+- Workspace Symbols: project-wide search + startup pre-indexing
+- Call Hierarchy: prepareCallHierarchy + incomingCalls + outgoingCalls
+- Type Hierarchy: struct + class support, supertypes + subtypes
+
+### Editor Features
+- Code Lens: component type + props count above struct declarations
+- Semantic Tokens: keyword/type/function/variable/decorator/property
+- Document Highlights: same-name identifier highlighting
+- Folding Ranges: multi-line brace blocks
+- Selection Ranges: identifier/statement/block nesting
+- Document Links: clickable relative import paths
+
+### Project & Integration
+- Project context: root detection, `.ets`/`.ts` scanning, cross-file document loading
+- Module resolution: relative + `@kit.*` / `@ohos.*` minimal support
+- Incremental parse cache: parseCache + raw Tree + `parseArkTSIncremental()`
+- opencode: global/project config + launcher + 31/31 coverage matrix
+
+### ArkTS-Specific
+- 25 decorators: V1 (13) + V2 (10) + @Monitor/@Provider/@Consumer key matching
+- Component semantics: @Builder/@BuilderParam tree + ERROR recovery
+- Cross-file: import tracking + @Builder global/member resolution
+- Type system: union/intersection/array/generic/nullable + hover + InlayHint
 
 ## Status
 
-This is still an early scaffold focused on:
+| Metric | Value |
+|---|---|
+| Unit tests | 33 files / 298 cases ✅ |
+| Feature coverage | 31/31 LSP features ✅ |
+| Decorators | V1(13) + V2(10) + 2 key-match = 25 |
+| Build | `npm run build` + `npm run check` ✅ |
+| opencode | Global + project config + launcher script |
+| Test fixture | `test-fixture/` — 9-source HarmonyOS project |
 
-- stabilizing the server lifecycle
-- improving testability
-- gradually moving from text-level matching to ArkTS project-aware behavior
-- prioritizing import/export-aware navigation, rename, and completion flows
-- validating `opencode` integration against real HarmonyOS projects
-- keeping `README.md` and relevant `AGENTS.md` files updated when behavior or workflow changes
+## Quick Start
 
-## Installing from npm
-
-You can install `arkts-lsp` directly from npm without cloning the repository:
-
-### Global install
+### From npm
 
 ```bash
 npm install -g @fe-essential/arkts-lsp
-```
-
-After installing, start the server with:
-
-```bash
 arkts-lsp --stdio
 ```
 
-### Using npx (no install)
+Or via npx:
 
 ```bash
 npx @fe-essential/arkts-lsp --stdio
 ```
 
-### Install as a project dependency
+### Local development
 
 ```bash
-npm install @fe-essential/arkts-lsp
-```
-
-Invoke via `node_modules/.bin/arkts-lsp --stdio`.
-
-## Quick Start (local development)
-
-To develop or run tests locally, clone the repository and run:
-
-```bash
+git clone <repo>
+cd arkts-lsp
 npm install
 npm run build
 npm run start -- --stdio
 ```
 
-For local development:
-
-```bash
-npm run dev -- --stdio
-```
-
 ## Scripts
 
-- `npm run build`: compile TypeScript to `dist/`
-- `npm run dev`: run the server with `tsx`
-- `npm run start`: run the compiled server
-- `npm run check`: type-check without emitting files
-- `npm test`: run the unit test suite with Vitest
+| Command | Purpose |
+|---|---|
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm run dev` | Dev server with `tsx` |
+| `npm run start` | Run compiled server |
+| `npm run check` | TypeScript type check |
+| `npm test` | 298 unit tests |
+| `node scripts/coverage-matrix.cjs` | 31-feature LSP verification |
+| `node scripts/integration-test.cjs` | Quick integration test (8 checks) |
 
 ## Testing
 
-Current tests cover the core behaviors that are easiest to regress while the server is still evolving:
+### Unit tests (33 files / 298 cases)
+parser, decorator metadata/hover/diagnostics, V2 constraints, component props, builder resolver, workspace indexer, incremental parse, cross-file component, hierarchical symbols, call hierarchy, type hierarchy, type model, type inlay, CodeLens, completion, hover, code action, semantic tokens, inlay hint, project API, e2e protocol
 
-- diagnostics extraction
-- symbol extraction
-- word lookup at a cursor position
-- workspace symbol filtering
-- definition resolution
-- reference lookup
-- completion results
-- hover formatting
-- ArkTS component field semantics and `this.` member completion
-- inlay hint parameter labels
-- code action quick fixes
-- semantic tokens
-- document highlight
-- folding range
-- selection range
-- rename workspace edits
-- project root detection
-- project file scanning and project-context loading
-- document-link generation for relative import specifiers
-
-## Roadmap
-
-The next major milestones are:
-
-1. import and module resolution
-2. upgrading definition / references / rename further from text matching to project-aware behavior
-3. adding more realistic fixtures and integration-style tests
-4. expanding end-to-end `opencode` validation
-5. improving completion and diagnostics quality
+### Integration tests
+- `scripts/integration-test.cjs` — symbols/completion/definition/hover/diagnostics (8 checks)
+- `scripts/coverage-matrix.cjs` — full feature coverage (31 checks) using `test-fixture/`
 
 ## opencode Integration
 
-OpenCode officially supports custom LSP servers through the `lsp` section in `opencode.json`.
-
-Useful paths:
-
-- global config: `~/.config/opencode/opencode.json`
-- project config: `opencode.json` in the project root
-
-This repository includes:
-
-- [examples/opencode.global.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.global.json:1)
-- [examples/opencode.project.json](/Users/menghongfei/projects/arkts-lsp/examples/opencode.project.json:1)
-- [scripts/opencode-arkts-lsp](/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp:1)
-
-Recommended rollout:
-
-1. Enable `.ets` globally first
-2. Add project-level config in real ArkTS/HarmonyOS workspaces
-3. Disable the built-in TypeScript LSP per ArkTS project if you want `.ts` files handled by `arkts-lsp`
-
-If you installed via `npm install -g @fe-essential/arkts-lsp`, use the `arkts-lsp` command directly:
+### Global config (.ets only)
 
 ```json
 {
@@ -178,47 +124,29 @@ If you installed via `npm install -g @fe-essential/arkts-lsp`, use the `arkts-ls
 }
 ```
 
-Or with npx (no global install needed):
+### Project-level config (.ets + .ts, disable default TS LSP)
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "lsp": {
-    "arkts-lsp": {
-      "command": ["npx", "@fe-essential/arkts-lsp"],
-      "extensions": [".ets"]
-    }
-  }
-}
-```
-
-If you're developing from source, use the local wrapper script:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "lsp": {
-    "arkts-lsp": {
-      "command": ["/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp"],
-      "extensions": [".ets"]
-    }
-  }
-}
-```
-
-A recommended project-level setup:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "lsp": {
-    "typescript": {
-      "disabled": true
-    },
+    "typescript": { "disabled": true },
     "arkts-lsp": {
       "command": ["arkts-lsp"],
-      "extensions": [".ets", ".ts"]
+      "extensions": [".ets", ".ts"],
+      "initialization": {
+        "projectMarkers": ["AppScope/app.json5", "hvigorfile.ts", "build-profile.json5"]
+      }
     }
   }
 }
 ```
+
+See examples: [examples/opencode.global.json](examples/opencode.global.json), [examples/opencode.project.json](examples/opencode.project.json)
+
+## Roadmap
+
+1. HarmonyOS API SDK-driven with full signature library
+2. Linked Editing Ranges / Moniker
+3. File watching + workspace/configuration
+4. Real project integration tests + performance benchmarks

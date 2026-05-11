@@ -1,0 +1,7 @@
+{
+  "app": {
+    "bundleName": "com.example.testfixture",
+    "versionCode": 1,
+    "versionName": "1.0.0"
+  }
+}

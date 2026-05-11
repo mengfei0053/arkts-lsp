@@ -16,7 +16,7 @@
 - **引用查找**：支持 import/export 关联引用
 - **重命名**：生成工作区编辑结果
 - **补全**：关键字、工作区符号、命名导入导出、`this.` 实例成员、导入类的静态成员
-- **签名帮助**：导入函数与类方法的签名提示
+- **签名帮助**：导入函数与类方法（含实例方法 + `this.field.method()` 链式调用）的签名提示
 - **Inlay Hints**：本地函数与导入别名的参数名提示
 - **Code Actions**：针对 `TODO` / `any` 诊断的快速修复
 - **语义高亮**：关键字、类型、函数、变量、装饰器、属性
@@ -26,7 +26,8 @@
 - **折叠范围**：多行大括号代码块折叠
 - **选择范围**：标识符、语句、代码块的层级选择
 - **项目上下文**：工程根识别、`.ets` / `.ts` 扫描、项目级文档加载
-- **opencode 集成**：全局 / 项目配置示例与启动脚本
+- **opencode 集成**：全局 / 项目配置示例与启动脚本 + 全功能集成测试脚本 `scripts/integration-test.cjs` + 覆盖矩阵 `scripts/coverage-matrix.cjs`（31/31）
+- **鸿蒙测试项目**：`test-fixture/` — 9 源文件 + 完整构建配置（hvigor + build-profile + module.json5），覆盖 V1/V2 装饰器、跨文件引用、@Observed class
 - **Code Lens**：struct 声明上方展示组件类型标签 + props 数量 + 子组件树概览
 - **增量解析缓存**：parseCache (uri, version, contentHash) 三级缓存 + raw Tree 保留支持 `parseArkTSIncremental()`
 - **工作区符号索引**：`workspace-indexer.ts`，启动预索引 + 生命周期增量更新 + `findSymbolInWorkspace()`
