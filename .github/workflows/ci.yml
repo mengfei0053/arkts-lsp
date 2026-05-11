@@ -27,6 +27,11 @@ jobs:
         env:
           npm_config_registry: https://registry.npmjs.org/
 
+      - name: Vendor tree-sitter-arkts
+        run: |
+          rm -rf node_modules/tree-sitter-arkts
+          cp -r vendor/tree-sitter-arkts node_modules/
+
       - name: Type check
         run: npm run check
 
