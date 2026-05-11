@@ -173,7 +173,7 @@ export type ObservedV2ClassInfo = {
 };
 
 const parser = new Parser();
-parser.setLanguage(ArkTSModule.ArkTS);
+parser.setLanguage(ArkTSModule as any);
 
 // ─── Parse Cache ─────────────────────────────────────────────────────────────
 

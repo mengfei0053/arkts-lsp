@@ -1,0 +1,22 @@
+diff --git a/bindings/node/index.js b/bindings/node/index.js
+index original..patched
+--- a/bindings/node/index.js
++++ b/bindings/node/index.js
+@@ -1,10 +1,14 @@
+ const root = require("path").join(__dirname, "..", "..");
+ 
+-module.exports =
++const language =
+   typeof process.versions.bun === "string"
+     ? require(`../../prebuilds/${process.platform}-${process.arch}/tree-sitter-arkts.node`)
+     : require("node-gyp-build")(root);
+ 
++// Attach nodeTypeInfo directly to the language object so tree-sitter's
++// initializeLanguageNodeClasses can find it (required for tree-sitter 0.21).
+ try {
+-  module.exports.nodeTypeInfo = require("../../src/node-types.json");
+-} catch (_) { }
++  language.nodeTypeInfo = require("../../src/node-types.json");
++} catch (_) {}
++
++module.exports = language;
