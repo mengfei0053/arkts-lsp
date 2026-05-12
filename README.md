@@ -74,7 +74,7 @@ arkts-lsp --stdio
 或使用 npx（免安装）：
 
 ```bash
-npx @fe-essential/arkts-lsp --stdio
+npx --yes --registry https://registry.npmjs.org/ @fe-essential/arkts-lsp --stdio
 ```
 
 ### 本地开发
@@ -119,7 +119,7 @@ parser、decorator metadata/hover/diagnostics、V2 约束、component props、bu
   "$schema": "https://opencode.ai/config.json",
   "lsp": {
     "arkts-lsp": {
-      "command": ["npx", "@fe-essential/arkts-lsp"],
+      "command": ["npx", "--yes", "--registry", "https://registry.npmjs.org/", "@fe-essential/arkts-lsp"],
       "extensions": [".ets"]
     }
   }
@@ -134,17 +134,17 @@ parser、decorator metadata/hover/diagnostics、V2 约束、component props、bu
   "lsp": {
     "typescript": { "disabled": true },
     "arkts-lsp": {
-      "command": ["npx", "@fe-essential/arkts-lsp"],
+      "command": ["npx", "--yes", "--registry", "https://registry.npmjs.org/", "@fe-essential/arkts-lsp"],
       "extensions": [".ets", ".ts"],
       "initialization": {
-        "projectMarkers": ["AppScope/app.json5", "hvigorfile.ts", "build-profile.json5"]
+        "projectMarkers": ["AppScope/app.json5", "hvigorfile.ts", "build-profile.json5", "oh-package.json5"]
       }
     }
   }
 }
 ```
 
-> 配置文件放于项目根目录 `opencode.json` 或全局 `~/.config/opencode/opencode.json`。
+> 配置文件放于项目根目录 `opencode.json` 或全局 `~/.config/opencode/opencode.json`。建议保留 `--yes` 与 `--registry https://registry.npmjs.org/`，避免首次 npx 交互确认、镜像同步延迟或 OpenCode 初始化超时。
 
 ### 方式二：全局安装
 

@@ -3,7 +3,11 @@
   "lsp": {
     "arkts-lsp": {
       "command": [
-        "/Users/menghongfei/projects/arkts-lsp/scripts/opencode-arkts-lsp"
+        "npx",
+        "--yes",
+        "--registry",
+        "https://registry.npmjs.org/",
+        "@fe-essential/arkts-lsp"
       ],
       "extensions": [
         ".ets"

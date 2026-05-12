@@ -74,7 +74,7 @@ arkts-lsp --stdio
 Or via npx:
 
 ```bash
-npx @fe-essential/arkts-lsp --stdio
+npx --yes --registry https://registry.npmjs.org/ @fe-essential/arkts-lsp --stdio
 ```
 
 ### Local development
@@ -110,21 +110,21 @@ parser, decorator metadata/hover/diagnostics, V2 constraints, component props, b
 
 ## opencode Integration
 
-### Global config (.ets only)
+### npx config (.ets only, recommended)
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "lsp": {
     "arkts-lsp": {
-      "command": ["arkts-lsp"],
+      "command": ["npx", "--yes", "--registry", "https://registry.npmjs.org/", "@fe-essential/arkts-lsp"],
       "extensions": [".ets"]
     }
   }
 }
 ```
 
-### Project-level config (.ets + .ts, disable default TS LSP)
+### Project-level npx config (.ets + .ts, disable default TS LSP)
 
 ```json
 {
@@ -132,10 +132,10 @@ parser, decorator metadata/hover/diagnostics, V2 constraints, component props, b
   "lsp": {
     "typescript": { "disabled": true },
     "arkts-lsp": {
-      "command": ["arkts-lsp"],
+      "command": ["npx", "--yes", "--registry", "https://registry.npmjs.org/", "@fe-essential/arkts-lsp"],
       "extensions": [".ets", ".ts"],
       "initialization": {
-        "projectMarkers": ["AppScope/app.json5", "hvigorfile.ts", "build-profile.json5"]
+        "projectMarkers": ["AppScope/app.json5", "hvigorfile.ts", "build-profile.json5", "oh-package.json5"]
       }
     }
   }
@@ -143,6 +143,8 @@ parser, decorator metadata/hover/diagnostics, V2 constraints, component props, b
 ```
 
 See examples: [examples/opencode.global.json](examples/opencode.global.json), [examples/opencode.project.json](examples/opencode.project.json)
+
+Put project-level config in `opencode.json`, or global config in `~/.config/opencode/opencode.json`. Keeping `--yes` and `--registry https://registry.npmjs.org/` avoids first-run npx prompts, npm mirror lag, and OpenCode LSP initialization timeouts.
 
 ## Roadmap
 
